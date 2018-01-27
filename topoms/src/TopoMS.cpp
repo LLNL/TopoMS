@@ -254,15 +254,7 @@ bool TopoMS::load(const std::string &configfilename) {
 
         printf("\n num atoms = %d\n", m_atoms.size());
         printf(" function range [%f %f]\n", minval, maxval);
-        //printf(" function sum = %f\n", sumval);
-/*
-        ///HARDCODING -- H20 example needs these values
-        if (m_config->infilename.find("H2O") != -1){
-            printf(" overriding the units for H2O\n");
-            m_metadata.m_l_unit = 1.0;
-            m_metadata.m_e_unit = 1.0;
-        }
-*/
+
         // integration as a charge
         const FLOATTYPE chg_factor = (this->m_inputtype == IT_CUBE) ? m_metadata.volume() / (m_metadata.m_l_unit*m_metadata.m_l_unit*m_metadata.m_l_unit) / m_metadata.m_e_unit : 1.0;
         const FLOATTYPE totchg = sumval * chg_factor / (FLOATTYPE) m_metadata.grid_sz();

@@ -11,7 +11,7 @@ analysis.
 
 ### Installation
 
-The only external dependency of `TopoMS` is VTK (https://www.vtk.org/). Once VTK has been installed, `TopoMS` can be installed using the `cmake` system. `TopoMS` also requires a C++ compiler supporting OpenMP.
+The only external dependency of `TopoMS` is VTK (https://www.vtk.org/). Once VTK has been installed, `TopoMS` can be installed using the `cmake` system. `TopoMS`  requires a C++ compiler supporting OpenMP.
 
 ```
 $ pwd
