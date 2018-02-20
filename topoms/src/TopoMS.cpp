@@ -929,44 +929,6 @@ void TopoMS::simplify_msc(FLOATTYPE pvalue, FLOATTYPE fvalue) {
 
     s_r1saddles->compute_output();
 
-    //CoverImage: Extract Li's molecule
-    //std::vector<int> nodeids {1478,2827,3236,3289,4618,5040,4366,4977,5240,5481,5295};
-
-    std::vector<int> nodeids {4792,5829,5471,5423,3575,3363,2910,2905,3175,3362,3586,2665,2099,2976,5471,
-    5697,
-    5900,
-    5633,
-    5529,
-    6016,
-    5040,
-    5700, 5702,
-    6274,
-    5427,
-    6014,
-    5829,
-    7170,
-    7632,
-    7579,
-    8682,
-    9343,
-    8930,
-    9589,
-    9772,
-    9539,
-    9277,
-    5423,
-    5468,
-    5259,
-    5583,
-    5763,
-    5307,
-    5522,
-    6162,
-    5208,
-    4809,
-    5784,
-    5522};
-
     // ----------------------------------------------------------
     // compute paths
     static const float eps = 0.000001;
@@ -983,10 +945,6 @@ void TopoMS::simplify_msc(FLOATTYPE pvalue, FLOATTYPE fvalue) {
             if (arc.upper != *it) {
                 continue;
             }
-
-            //CoverImage: Extract Li's molecule
-            if ( std::find(nodeids.begin(), nodeids.end(), arc.upper) == nodeids.end() )
-                continue;
 
             INDEX_TYPE lowercellid = m_msc->getNode(arc.lower).cellindex;       // combinatorial says this is where we should end up
             INDEX_TYPE uppercellid = m_msc->getNode(arc.upper).cellindex;       // combinatorial says this is where we should end up
