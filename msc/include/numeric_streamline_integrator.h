@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 University of Utah 
+ * Copyright (c) 2017 University of Utah
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -360,7 +360,10 @@ namespace MSC {
 
             Vec3l t_coords = start_coords; // get the coordinates of the poitn
             //if (t_coords[0] == 0 && t_coords[1] == 0) printf("doing %d\n", t_coords[2]);
-            Vec3d t_current_point = t_coords;
+
+            //BUGFIX. starting point should be the seed
+            //Vec3d t_current_point = t_coords;
+            Vec3d t_current_point = seed;
             int t_num_iterations_left = m_max_steps;
             bool t_continue = true;
 
