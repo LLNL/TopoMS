@@ -1,6 +1,8 @@
 ## TopoMS, Version 1.0
 
-<img align="right" src="https://user-images.githubusercontent.com/10440378/35475248-ebbbba0c-034f-11e8-8980-1199a5c5fb56.png" width="50%">
+<img align="right" src="./docs/jcc25344-toc-0001-m.jpg" width="50%">
+
+<!--<img align="right" src="https://user-images.githubusercontent.com/10440378/35475248-ebbbba0c-034f-11e8-8980-1199a5c5fb56.png" width="50%">-->
 
 ##### Author: Harsh Bhatia, hbhatia@llnl.gov; Attila G Gyulassy
 
@@ -13,7 +15,7 @@ TopoMS provides scalable, numerically robust, and topologically consistent
 analysis.
 
 If you use TopoMS, please cite the following publication.
-* H Bhatia, A G Gyulassy, V Lordi, J E Pask, V Pascucci, and P-T Bremer, "TopoMS: Comprehensive Topological Exploration for Molecular and Condensed-Matter Systems," Journal of Computational Chemistry, to appear. doi:10.1002/jcc.25181.
+* H Bhatia, A G Gyulassy, V Lordi, J E Pask, V Pascucci, and P-T Bremer, "TopoMS: Comprehensive Topological Exploration for Molecular and Condensed-Matter Systems," Journal of Computational Chemistry, vol. 39, issue 16, pp 936–952, June 2018. [doi:10.1002/jcc.25181](https://doi.org/10.1002/jcc.25181).
 
 TopoMS can be used as a command-line tool (`./topoms`) or with a GUI
 (`./topoms-ui`), where the latter also enables an interactive exploration of
