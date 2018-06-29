@@ -11,17 +11,34 @@ analysis.
 
 ### Installation
 
-In addition to `TopoMS`, `TopoMS-UI` depends upon Qt and QGLViewer
-(http://libqglviewer.com/). Once Qt and QGLViewer have been installed,
-please edit the `TopoMSUI.pro` file to provide the paths to QGLViewer and VTK
-(lines 29--31). TopoMS-UI can be installed using the `qmake` system.
+In addition to `TopoMS`, `TopoMS-UI` depends upon `Qt` and `QGLViewer`
+(http://libqglviewer.com/); compatible version is `libQGLViewer 2.7.1`.
+Once Qt and QGLViewer have been installed, you may use `cmake` or Qt's `qmake`
+system to build the tool.
 
 ```
 $ pwd
 TopoMS/topoms-ui
-$ qmake
+$ mkdir build
+$ qmake -spec macx-g++ QMAKE_CXX=<path-to-gnu-c++> \  # this line needed only for Mac
+        INCLUDEPATH+=/usr/include \                   # this line needed only for Mac OS 10.13
+        QGLPATH=/Users/bhatia4/usr \
+        VTKPATH=/Users/bhatia4/usr VTKVERSION=7.1 ..
 $ make
 ```
+
+If you are more comfortable using `cmake`, you may proceed as follows
+```
+$ pwd
+TopoMS/topoms-ui
+$ mkdir build
+$ cmake -DCMAKE_CXX_COMPILER=<path-to-gnu-c++> \  # this line needed only for Mac
+        -DQGLPATH=/Users/bhatia4/usr
+$ make
+```
+
+Note: If you're using the install scripts, the external dependencies will be installed
+in `TopoMS/external`, and the executables will be installed in `TopoMS/build`.
 
 ### Execution
 

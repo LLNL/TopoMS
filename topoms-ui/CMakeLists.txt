@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 
 ENABLE_LANGUAGE(CXX)
-PROJECT(TopoMS CXX)
+PROJECT(TopoMS-UI CXX)
 
 IF(NOT CMAKE_COMPILER_IS_GNUCXX)
   MESSAGE(FATAL_ERROR "TopoMS requires a GNU compiler. CMake will fail.")
@@ -38,26 +38,52 @@ IF(VTK_FOUND)
 ENDIF(VTK_FOUND)
 
 # ------------------------------------------------------------------------------
+find_package(OpenGL REQUIRED)
+
+find_package(Qt5 COMPONENTS Core Gui OpenGL Widgets Xml PrintSupport REQUIRED)
+set(QT_LIBRARIES Qt5::Core Qt5::Gui Qt5::OpenGL Qt5::Widgets Qt5::Xml Qt5::PrintSupport)
+
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+
+include_directories( ${Qt5Core_INCLUDE_DIRS}
+                     ${Qt5Gui_INCLUDE_DIRS}
+                     ${Qt5OpenGL_INCLUDE_DIRS}
+                     ${Qt5Widgets_INCLUDE_DIRS}
+                     ${Qt5Xml_INCLUDE_DIRS}
+                     ${Qt5PrintSupport_INCLUDE_DIRS} )
+
+MESSAGE( STATUS "QGLPATH: " ${QGLPATH} )
+INCLUDE_DIRECTORIES(${QGLPATH}/include)
+set(QGLVIEWER_LIBRARIES ${QGLPATH}/lib/libQGLViewer.a)
+
+# ------------------------------------------------------------------------------
 SET(MSC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../msc)
-SET(TOPOMS_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+SET(TOPOMS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../topoms)
+SET(TOPOMSUI_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
 MESSAGE( STATUS "MSC_DIR: " ${MSC_DIR} )
 MESSAGE( STATUS "TOPOMS_DIR: " ${TOPOMS_DIR} )
+MESSAGE( STATUS "TOPOMS_DIR: " ${TOPOMSUI_DIR} )
 
-INCLUDE_DIRECTORIES(${MSC_DIR}/include ${TOPOMS_DIR}/include)
+INCLUDE_DIRECTORIES(${MSC_DIR}/include ${TOPOMS_DIR}/include ${TOPOMSUI_DIR}/include)
 
 FILE(GLOB HEADERS_MSC ${MSC_DIR}/include/*.h)
 FILE(GLOB SOURCES_MSC ${MSC_DIR}/src/*.cxx)
 
 FILE(GLOB HEADERS_TOPOMS ${TOPOMS_DIR}/include/*.h)
-FILE(GLOB SOURCES_TOPOMS ${TOPOMS_DIR}/src/*.cpp)
+FILE(GLOB SOURCES_TOPOMS ${TOPOMS_DIR}/src/TopoMS.cpp ${TOPOMS_DIR}/src/Utils.cpp)
+
+FILE(GLOB HEADERS_TOPOMSUI ${TOPOMSUI_DIR}/include/*.h)
+FILE(GLOB SOURCES_TOPOMSUI ${TOPOMSUI_DIR}/src/*.cpp)
 
 # ------------------------------------------------------------------------------
 
-ADD_EXECUTABLE(TopoMS ${HEADERS_MSC} ${SOURCES_MSC}
-                      ${HEADERS_TOPOMS} ${SOURCES_TOPOMS})
+ADD_EXECUTABLE(TopoMS-UI ${HEADERS_MSC} ${HEADERS_TOPOMS} ${HEADERS_TOPOMSUI}
+                         ${SOURCES_MSC} ${SOURCES_TOPOMS} ${SOURCES_TOPOMSUI})
 
-IF(VTK_FOUND)
-  TARGET_LINK_LIBRARIES(TopoMS LINK_PUBLIC vtkCommonCore vtkCommonDataModel vtkIOCore vtkIOXML vtkIOLegacy)
-ENDIF(VTK_FOUND)
+TARGET_LINK_LIBRARIES(TopoMS-UI LINK_PUBLIC
+                      vtkCommonCore vtkCommonDataModel vtkIOCore vtkIOXML vtkIOLegacy
+                      ${QT_LIBRARIES} ${OPENGL_LIBRARIES} ${QGLVIEWER_LIBRARIES})
 # ------------------------------------------------------------------------------

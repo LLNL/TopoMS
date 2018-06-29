@@ -311,6 +311,9 @@ public:
 
     TopoMSViewer(QWidget *parent);
 
+    // to support QGLViewer 2.7.1
+    void updateGL(){  this->update(); }
+
     void set_volrendFunction(float *f, int X, int Y, int Z) {
         vsvr->tex_set_resolution(X, Y, Z);
         vsvr->tex_set_extern(f);

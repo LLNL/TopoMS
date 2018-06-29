@@ -275,7 +275,7 @@ END OF TERMS AND CONDITIONS
 #include "TopoMS.h"
 #include "TopoMS_Viewer.h"
 #include "TopoMS_MainWindow.h"
-#include "utils.h"
+#include "Utils.h"
 #include "Colorator.h"
 
 #include <QGLViewer/manipulatedCameraFrame.h>

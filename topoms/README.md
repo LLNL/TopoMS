@@ -11,16 +11,25 @@ analysis.
 
 ### Installation
 
-The only external dependency of `TopoMS` is VTK (https://www.vtk.org/). Once VTK has been installed, `TopoMS` can be installed using the `cmake` system. `TopoMS`  requires a C++ compiler supporting OpenMP.
+Update: Please see the script `TopoMS/install.topoms.sh`, which automates the
+following steps.
+
+The only external dependency of `TopoMS` is VTK (https://www.vtk.org/); recommended
+version `VTK 7.1.1`. Once VTK has been installed, `TopoMS` can be installed using
+the `cmake` system. `TopoMS`  requires a C++ compiler supporting OpenMP.
 
 ```
 $ pwd
 TopoMS/topoms
 $ mkdir build
-# cd build
-$ cmake ../
+$ cd build
+$ cmake -DCMAKE_CXX_COMPILER=<path-to-gnu-c++> ..   # path needed for Mac
 $ make
 ```
+
+Note: If you're using the install scripts, the external dependencies will be installed
+in `TopoMS/external`, and the executables will be installed in `TopoMS/build`.
+In this case, the path to VTK may need to be supplied explicitly to `cmake`.
 
 ### Execution
 

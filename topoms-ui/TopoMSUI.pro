@@ -1,16 +1,26 @@
 TARGET = TopoMS-UI
-QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.11
+QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.12
 
-CONFIG *= qt release thread warn_off
-QT *= xml opengl printsupport widgets
+CONFIG *= qt opengl thread release warn_off
+QT *=  gui widgets opengl xml printsupport
 
-QMAKE_CXXFLAGS += -fpermissive -fopenmp -std=c++11
+QMAKE_CXXFLAGS += -fpermissive -w -fopenmp -std=c++11
 LIBS += -fopenmp
 CONFIG += c++11
 
 macx {
     CONFIG -= app_bundle
 }
+
+## -------------------------------------------------
+## get the cpp compiler
+## -------------------------------------------------
+QMAKE_LINK              = $$QMAKE_CXX
+QMAKE_LINK_SHLIB        = $$QMAKE_CXX
+message('QMAKE_CXX  : '$$QMAKE_CXX)
+
+# for Mac OS 10.13, this additional include is needed
+INCLUDEPATH *= /usr/include
 
 ## -------------------------------------------------
 ## paths to temporary output files
@@ -26,15 +36,18 @@ RCC_DIR = $$OUT_PWD/obj/
 ## specify external libraries and paths to be used
 ## -------------------------------------------------
 
-QGLPATH = $$(HOME)/usr
-VTKPATH = $$(HOME)/usr
-VTKVERSION = 7.0
+isEmpty(QGLPATH){      QGLPATH = $$(HOME)/usr   }
+isEmpty(VTKPATH){      VTKPATH = $$(HOME)/macports   }
+isEmpty(VTKVERSION){   VTKVERSION = 7.1   }
 
-
+message('QGL_PATH   : '$$QGLPATH)
+message('VTK_PATH   : '$$VTKPATH)
+message('VTK_VERSION: '$$VTKVERSION)
 
 # QGLViewer
 INCLUDEPATH *= $$QGLPATH/include
-LIBS *= $$QGLPATH/lib/libQGLViewer.a
+LIBS *= -L$$QGLPATH/lib
+LIBS += -lQGLViewer
 
 # vtk
 INCLUDEPATH += $$VTKPATH/include/vtk-$$VTKVERSION
@@ -58,7 +71,7 @@ DEFINES += USE_KAHAN_SUM
 MSC_PATH = $$PWD/../msc
 TOPOMS_PATH = $$PWD/../topoms
 
-FORMS *= $$PWD/TopoMSUI.ui
+FORMS *= $$PWD/include/TopoMSUI.ui
 
 INCLUDEPATH *= $$MSC_PATH/include \
                $$TOPOMS_PATH/include \
@@ -69,7 +82,8 @@ HEADERS = $$MSC_PATH/include/*.h \
           $$PWD/include/*.h
 
 SOURCES = $$MSC_PATH/src/*.cxx \
-          $$TOPOMS_PATH/src/TopoMS.cpp $$TOPOMS_PATH/src/Utils.cpp  \
+          $$TOPOMS_PATH/src/TopoMS.cpp \
+          $$TOPOMS_PATH/src/Utils.cpp  \
           $$PWD/src/*.cpp
 
 ## -------------------------------------------------

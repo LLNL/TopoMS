@@ -1268,7 +1268,7 @@ namespace MSC {
 
                 if (this->currarc == NULLID) return false;
                 while (!this->mMSC->isArcAlive(this->currarc)) {
-                     this->currarc = next_arc(this->currarc);
+                     this->currarc = this->next_arc(this->currarc);
                      if (this->currarc == NULLID) return false;
                 }
                 return true;
