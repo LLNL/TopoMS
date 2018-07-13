@@ -1,44 +1,47 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+# ------------------------------------------------------------------------------
+cmake_minimum_required(VERSION 2.6)
 
-ENABLE_LANGUAGE(CXX)
-PROJECT(TopoMS-UI CXX)
-
-IF(NOT CMAKE_COMPILER_IS_GNUCXX)
-  MESSAGE(FATAL_ERROR "TopoMS requires a GNU compiler. CMake will fail.")
-  exit()
-ENDIF()
-
+enable_language(CXX)
+project(TopoMS-UI CXX)
 set(CMAKE_BUILD_TYPE Release)
 
+if(NOT CMAKE_COMPILER_IS_GNUCXX)
+  message(FATAL_ERROR "TopoMS requires a GNU compiler. CMake will fail.")
+endif()
+
 ## Compiler flags
-set(CMAKE_CXX_FLAGS "-O3")          ## Optimize
-set(CMAKE_CXX_FLAGS "-std=c++0x -fpermissive -w")
-#set(CMAKE_EXE_LINKER_FLAGS "-s")  ## Strip binary
+set(CMAKE_CXX_FLAGS         "-O3")                         ## Optimize
+set(CMAKE_CXX_FLAGS         "-std=c++0x -fpermissive -w")
+#set(CMAKE_EXE_LINKER_FLAGS "-s")                          ## Strip binary
 
 # other project definitions
-ADD_DEFINITIONS(-DUSE_KAHAN_SUM=TRUE)
+add_definitions(-DUSE_KAHAN_SUM=TRUE)
 
 # ------------------------------------------------------------------------------
-FIND_PACKAGE(OpenMP REQUIRED)
+find_package(OpenMP REQUIRED)
 
-MESSAGE( STATUS "OpenMP_C_FLAGS: " ${OpenMP_C_FLAGS} )
-MESSAGE( STATUS "OpenMP_CXX_FLAGS: " ${OpenMP_CXX_FLAGS} )
-MESSAGE( STATUS "CMAKE_EXE_LINKER_FLAGS: " ${CMAKE_EXE_LINKER_FLAGS} )
+message(STATUS "OpenMP_CXX_FLAGS: "        ${OpenMP_CXX_FLAGS})
+message(STATUS "OpenMP_EXE_LINKER_FLAGS: " ${OpenMP_EXE_LINKER_FLAGS})
+message(STATUS "CMAKE_EXE_LINKER_FLAGS: "  ${CMAKE_EXE_LINKER_FLAGS})
 
-SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS} -fpermissive")
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS} -fpermissive")
-SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS}         ${OpenMP_CXX_FLAGS} -fpermissive")
+set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS}  ${OpenMP_EXE_LINKER_FLAGS}")
 
 # ------------------------------------------------------------------------------
-FIND_PACKAGE(VTK)
-IF(VTK_FOUND)
-  MESSAGE(STATUS "Found VTK " ${VTK_VERSION})
-  INCLUDE(${VTK_USE_FILE})
-  ADD_DEFINITIONS(-DUSE_VTK=TRUE)
-ENDIF(VTK_FOUND)
+find_package(VTK 7.1
+                 HINTS ${CMAKE_CURRENT_SOURCE_DIR}/../external/lib/cmake/vtk-7.1)
+if(VTK_FOUND)
+  add_definitions(-DUSE_VTK=TRUE)
+  message(STATUS "Found VTK " ${VTK_VERSION} ": " ${VTK_INCLUDE_DIRS})
+  include(${VTK_USE_FILE})
+  #set(VTK_LIBRARIES vtkCommonCore vtkCommonDataModel vtkIOCore vtkIOXML vtkIOLegacy)
+endif(VTK_FOUND)
 
 # ------------------------------------------------------------------------------
 find_package(OpenGL REQUIRED)
+find_package(GLEW 2.1 REQUIRED)
+include_directories(${OPENGL_INCLUDE_DIRS} ${GLEW_INCLUDE_DIRS})
+add_definitions(-DUSE_GLEW=TRUE)
 
 find_package(Qt5 COMPONENTS Core Gui OpenGL Widgets Xml PrintSupport REQUIRED)
 set(QT_LIBRARIES Qt5::Core Qt5::Gui Qt5::OpenGL Qt5::Widgets Qt5::Xml Qt5::PrintSupport)
@@ -47,43 +50,84 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 
-include_directories( ${Qt5Core_INCLUDE_DIRS}
-                     ${Qt5Gui_INCLUDE_DIRS}
-                     ${Qt5OpenGL_INCLUDE_DIRS}
-                     ${Qt5Widgets_INCLUDE_DIRS}
-                     ${Qt5Xml_INCLUDE_DIRS}
-                     ${Qt5PrintSupport_INCLUDE_DIRS} )
-
-MESSAGE( STATUS "QGLPATH: " ${QGLPATH} )
-INCLUDE_DIRECTORIES(${QGLPATH}/include)
-set(QGLVIEWER_LIBRARIES ${QGLPATH}/lib/libQGLViewer.a)
+include_directories(${Qt5Core_INCLUDE_DIRS}   ${Qt5Gui_INCLUDE_DIRS}
+                    ${Qt5OpenGL_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS}
+                    ${Qt5Xml_INCLUDE_DIRS}    ${Qt5PrintSupport_INCLUDE_DIRS})
 
 # ------------------------------------------------------------------------------
-SET(MSC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../msc)
-SET(TOPOMS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../topoms)
-SET(TOPOMSUI_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+# libQGLViewer  # TODO: move this into a FindQGLViewer.cmake file
 
-MESSAGE( STATUS "MSC_DIR: " ${MSC_DIR} )
-MESSAGE( STATUS "TOPOMS_DIR: " ${TOPOMS_DIR} )
-MESSAGE( STATUS "TOPOMS_DIR: " ${TOPOMSUI_DIR} )
+#message(STATUS "QGL_DIR: " ${QGL_DIR})
+find_path(QGLVIEWER_INCLUDE_DIR
+    NAMES QGLViewer/qglviewer.h
+    PATHS
+        /usr/include
+        /opt/local/include
+        /usr/local/include
+        /sw/include
+        ${QGL_DIR}/include
+    HINTS ${CMAKE_CURRENT_SOURCE_DIR}/../external/include
+    PATH_SUFFIXES Headers)
 
-INCLUDE_DIRECTORIES(${MSC_DIR}/include ${TOPOMS_DIR}/include ${TOPOMSUI_DIR}/include)
+find_library(QGLVIEWER_LIBRARY
+    NAMES qglviewer QGLViewer qglviewer-qt5 QGLViewer-qt5
+    PATHS
+        /usr/lib
+        /usr/local/lib
+        /opt/local/lib
+        /sw/lib
+        ${QGL_DIR}/lib
+        ENV LD_LIBRARY_PATH
+        ENV LIBRARY_PATH
+    HINTS ${CMAKE_CURRENT_SOURCE_DIR}/../external/lib
+    PATH_SUFFIXES
+        QGLViewer
+        QGLViewer/release)
 
-FILE(GLOB HEADERS_MSC ${MSC_DIR}/include/*.h)
-FILE(GLOB SOURCES_MSC ${MSC_DIR}/src/*.cxx)
+if (QGLVIEWER_INCLUDE_DIR)
+  message(STATUS "Found QGLViewer include directory: " ${QGLVIEWER_INCLUDE_DIR})
+  include_directories(${QGLVIEWER_INCLUDE_DIR})
+else()
+  message(FATAL_ERROR "QGLViewer include directory not found.")
+endif()
 
-FILE(GLOB HEADERS_TOPOMS ${TOPOMS_DIR}/include/*.h)
-FILE(GLOB SOURCES_TOPOMS ${TOPOMS_DIR}/src/TopoMS.cpp ${TOPOMS_DIR}/src/Utils.cpp)
-
-FILE(GLOB HEADERS_TOPOMSUI ${TOPOMSUI_DIR}/include/*.h)
-FILE(GLOB SOURCES_TOPOMSUI ${TOPOMSUI_DIR}/src/*.cpp)
+if (QGLVIEWER_LIBRARY)
+  message(STATUS "Found QGLViewer library: " ${QGLVIEWER_LIBRARY})
+else()
+  message(FATAL_ERROR "QGLViewer library not found.")
+endif()
 
 # ------------------------------------------------------------------------------
+set(MSC_DIR      ${CMAKE_CURRENT_SOURCE_DIR}/../msc)
+set(TOPOMS_DIR   ${CMAKE_CURRENT_SOURCE_DIR}/../topoms)
+set(TOPOMSUI_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
-ADD_EXECUTABLE(TopoMS-UI ${HEADERS_MSC} ${HEADERS_TOPOMS} ${HEADERS_TOPOMSUI}
-                         ${SOURCES_MSC} ${SOURCES_TOPOMS} ${SOURCES_TOPOMSUI})
+message(STATUS "MSC_DIR: "       ${MSC_DIR})
+message(STATUS "TopoMS_DIR: "    ${TOPOMS_DIR})
+message(STATUS "TopoMS-UI_DIR: " ${TOPOMSUI_DIR})
 
-TARGET_LINK_LIBRARIES(TopoMS-UI LINK_PUBLIC
-                      vtkCommonCore vtkCommonDataModel vtkIOCore vtkIOXML vtkIOLegacy
-                      ${QT_LIBRARIES} ${OPENGL_LIBRARIES} ${QGLVIEWER_LIBRARIES})
+include_directories(${MSC_DIR}/include ${TOPOMS_DIR}/include ${TOPOMSUI_DIR}/include)
+
+file(GLOB HDRS_MSC ${MSC_DIR}/include/*.h)
+file(GLOB SRCS_MSC ${MSC_DIR}/src/*.cxx)
+
+file(GLOB HDRS_TOPOMS ${TOPOMS_DIR}/include/*.h)
+file(GLOB SRCS_TOPOMS ${TOPOMS_DIR}/src/TopoMS.cpp
+                      ${TOPOMS_DIR}/src/Utils.cpp)
+
+file(GLOB HDRS_TOPOMSUI ${TOPOMSUI_DIR}/include/*.h)
+file(GLOB SRCS_TOPOMSUI ${TOPOMSUI_DIR}/src/*.cpp)
+
+# ------------------------------------------------------------------------------
+add_executable(TopoMS-UI ${HDRS_MSC} ${HDRS_TOPOMS} ${HDRS_TOPOMSUI}
+                         ${SRCS_MSC} ${SRCS_TOPOMS} ${SRCS_TOPOMSUI})
+
+if(VTK_FOUND)
+  target_link_libraries(TopoMS-UI LINK_PUBLIC ${VTK_LIBRARIES})
+endif(VTK_FOUND)
+target_link_libraries(TopoMS-UI LINK_PUBLIC
+                          ${QT_LIBRARIES}
+                          ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES}
+                          ${QGLVIEWER_LIBRARY})
+
 # ------------------------------------------------------------------------------

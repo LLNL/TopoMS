@@ -11,7 +11,10 @@ command -v cmake >/dev/null 2>&1 || { echo >&2 "Cannot find command 'cmake'. Abo
 if [ -n "${GNU_CXX}" ] ; then
   command -v "${GNU_CXX}" >/dev/null 2>&1 || { echo >&2 "Cannot find command '${GNU_CXX}'. Aborting."; exit 1;  }
   echo ''
-  echo "found" `"${GNU_CXX}"  --version | head -n1`
+  echo "Using" `"${GNU_CXX}"  --version | head -n1`:  `type gcc`
+else
+  echo ''
+  echo "Using" `gcc --version | head -n1`:  `type gcc`
 fi
 
 platform=`uname`
@@ -51,27 +54,17 @@ VTK_VERSION='7.1'
 VTK_VERSION_BUILD='1'
 VTK_NAME='VTK-'$VTK_VERSION'.'$VTK_VERSION_BUILD
 
-if [ $platform == 'Darwin' ]; then
-  libextn='.dylib'
-else
-  libextn='.so'
-fi
-
-# check for this lib file to decide if vtk is installed correctly
-# not the best way.. but works for now
-testfile=libvtkCommonCore-$VTK_VERSION$libextn
-testfile=$TopoMS_ROOT/external/lib/$testfile
-
-if [ ! -e $testfile ]; then
+testfile=$TopoMS_ROOT/external/lib/libvtkCommonCore-$VTK_VERSION*
+if ! ls $testfile 1> /dev/null 2>&1 ; then
   echo '  > '$VTK_NAME
 
-  if [ ! -e $VTK_NAME.tar.gz ]; then
+  if ! ls $VTK_NAME.tar.gz 1> /dev/null 2>&1 ; then
     echo '    > Downloading '$VTK_NAME
     rm $TopoMS_ROOT/external/vtk.download.log 2>/dev/null
     wget -o $TopoMS_ROOT/external/vtk.download.log https://www.vtk.org/files/release/$VTK_VERSION/$VTK_NAME.tar.gz
   fi
 
-  if [ ! -d $VTK_NAME ]; then
+  if ! ls $VTK_NAME 1> /dev/null 2>&1 ; then
     echo '    > Untarring the downloaded code'
     tar -xf $VTK_NAME.tar.gz
   fi
@@ -82,7 +75,8 @@ if [ ! -e $testfile ]; then
 
   echo '    > Configuring VTK'
   rm $TopoMS_ROOT/external/vtk.cmake.log 2>/dev/null
-  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$TopoMS_ROOT/external \
+  cmake -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=$TopoMS_ROOT/external \
         .. > $TopoMS_ROOT/external/vtk.cmake.log
 
   echo '    > Building VTK'
@@ -92,7 +86,7 @@ if [ ! -e $testfile ]; then
   echo '    > Installing VTK'
   make install > $TopoMS_ROOT/external/vtk.make.log
 
-  if [ -e $testfile ]; then
+  if ls $testfile 1> /dev/null 2>&1 ; then
     echo '    > VTK successfully installed in '$TopoMS_ROOT'/external.'
   else
     echo '    > VTK build failed. Please check the build logs in '$TopoMS_ROOT'/external for more information.'
@@ -116,17 +110,15 @@ echo '    > Configuring TopoMS'
 if [ -n "${GNU_CXX}" ] ; then
   echo '    > CXX_COMPILER: '$GNU_CXX
   cmake -DCMAKE_CXX_COMPILER=$GNU_CXX \
-        -DVTK_DIR=$TopoMS_ROOT/external/lib/cmake/vtk-$VTK_VERSION \
         $TopoMS_ROOT/topoms > topoms.cmake.log
 else
-  cmake -DVTK_DIR=$TopoMS_ROOT/external/lib/cmake/vtk-$VTK_VERSION \
-        $TopoMS_ROOT/topoms > topoms.cmake.log
+  cmake $TopoMS_ROOT/topoms > topoms.cmake.log
 fi
 
 echo '    > Building TopoMS'
 make -j6 > topoms.make.log
 
-if [ -e TopoMS ]; then
+if ls TopoMS 1> /dev/null 2>&1 ; then
   echo '    > TopoMS successfully built in '`pwd`
 else
   echo '    > TopoMS build failed. Please check the build logs in '`pwd`' for more information.'

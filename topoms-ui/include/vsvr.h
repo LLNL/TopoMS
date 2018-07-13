@@ -24,14 +24,12 @@
     #include <OpenGL/gl.h>   // openGL declarations
 #else
     #include <GL/glu.h>  // openGL utilities
-    #include <GL/gl.h>   // openGL declarations
+ // #include <GL/gl.h>   // openGL declarationd aniketh: glu.h already includes gl.h
 #endif
-
 
 #include <float.h>   // definition of FLT_EPSILON
 #include <stdio.h>   // definition of printf
 #include <stdlib.h>  // definition of NULL
-
 
 //_____________________________________________________________________________
 /** Very Simple Volume Rendering */

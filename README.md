@@ -30,22 +30,32 @@ provided in the `./configs` folder.
 
 ### Installation
 
-TopoMS requires a `gnu` C++ compiler (preferably `gcc 7.3`). Note that for Mac,
+* TopoMS requires a `gnu` C++ compiler (preferably `gcc 7.3`). Note that for Mac,
 the default `gcc` is in fact `clang`. Unless you have it configured otherwise,
-you need to set the path of `gnu` compiler explicitly (see below). TopoMS
-requires Visualization Toolkit (VTK) in order to output molecular graphs.
-Although optional, `VTK 7.1.1` is strongly suggested as a dependency.
+you need to set the path of `gnu` compiler explicitly (see below).
 
-In addition, `TopoMS-UI` also requires `Qt`, `OpenGL`, and `QGLViewer`. Please
-note that Qt often changes the API substantially between versions; the recommended
-version is `Qt 5.7`. Qt is available through a number of package managers. For
-example, for Mac, you can use `macports` to get Qt: `port install qt57`.
-The required version for `QGLViewer` is `2.7`.
+* In addition, `TopoMS-UI` requires the following to support visualization and
+user interface. TopoMS assumes the following are available on your machine.
+  * `Qt 5.7`: Note that Qt often changes the API substantially between versions;
+    please use the recommended version. Qt is available through a number of
+    package managers. For example, for Mac, you can use `macports` to get Qt:
+    `port install qt57`. Or you may install Qt from source. See [here](http://doc.qt.io/qt-5/linux.html#downloading-and-installing-qt) and
+    [here](http://doc.qt.io/qt-5/linux-building.html).
+  * `OpenGL`: Comes pre-installed on your machine.
+  * `GLEW 2.1.0`: Extension Wrangler for OpenGL. Also available through common
+  package managers. For Mac, `GLEW` is available via
+  `macports`: `port install glew`. You may also install it from source. See [here](http://glew.sourceforge.net/build.html).
+
+* Visualization Toolkit (VTK): `TopoMS`  requires VTK in order to output
+  molecular graphs. Although optional, `VTK 7.1.1` is strongly suggested as a
+  dependency.
+
+* Finally, `TopoMS-UI` also uses `QGLViewer 2.7` for visualization. See [here](http://libqglviewer.com/download.html).
 
 To simplify installation, scripts have been provided to build `TopoMS` as well
-as `TopoMS-UI` along with their dependencies. Please see the usage below.
-Additional instructions for individual installation are provided separately in
-the respective folders, `topoms` and `topoms-ui`.
+as `TopoMS-UI` along with their dependencies (`VTK` and `QGLViewer`). Please see
+the usage below. Additional instructions for individual installation are
+provided separately in the respective folders, `topoms` and `topoms-ui`.
 
 ```
 $ pwd
@@ -55,8 +65,12 @@ $ sh install.topoms.sh
 $ sh install.topoms-ui.sh
 ```
 
-`TopoMS` executables will be installed in `<your-path>\TopoMS\build`, and
-dependencies (`VTK` and `libQGLViewer`) will be installed in `<your-path>\TopoMS\external`.
+`TopoMS` executables will be installed in `<your-path>/TopoMS/build`, and
+dependencies (`VTK` and `QGLViewer`) will be installed in
+`<your-path>/TopoMS/external`.
+
+**Note:** The provided scripts have been tested on Mac OS 10.13 and Red Hat linux.
+Support for installation on Windows will be provided in the future.
 
 ### Examples
 

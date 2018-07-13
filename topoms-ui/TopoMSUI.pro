@@ -10,6 +10,7 @@ CONFIG += c++11
 
 macx {
     CONFIG -= app_bundle
+    INCLUDEPATH *= /usr/include     # for Mac OS 10.13, this additional include is needed
 }
 
 ## -------------------------------------------------
@@ -18,9 +19,6 @@ macx {
 QMAKE_LINK              = $$QMAKE_CXX
 QMAKE_LINK_SHLIB        = $$QMAKE_CXX
 message('QMAKE_CXX  : '$$QMAKE_CXX)
-
-# for Mac OS 10.13, this additional include is needed
-INCLUDEPATH *= /usr/include
 
 ## -------------------------------------------------
 ## paths to temporary output files
@@ -36,9 +34,10 @@ RCC_DIR = $$OUT_PWD/obj/
 ## specify external libraries and paths to be used
 ## -------------------------------------------------
 
-isEmpty(QGLPATH){      QGLPATH = $$(HOME)/usr   }
-isEmpty(VTKPATH){      VTKPATH = $$(HOME)/macports   }
 isEmpty(VTKVERSION){   VTKVERSION = 7.1   }
+isEmpty(VTKPATH){      VTKPATH = $$(HOME)/macports   }
+isEmpty(QGLPATH){      QGLPATH = $$(HOME)/usr   }
+isEmpty(GLEWPATH){     GLEWPATH = $$(HOME)/macports   }
 
 message('QGL_PATH   : '$$QGLPATH)
 message('VTK_PATH   : '$$VTKPATH)
@@ -47,13 +46,18 @@ message('VTK_VERSION: '$$VTKVERSION)
 # QGLViewer
 INCLUDEPATH *= $$QGLPATH/include
 LIBS *= -L$$QGLPATH/lib
-LIBS += -lQGLViewer
+LIBS *= -lQGLViewer
+
+# GLEW
+DEFINES += USE_GLEW
+INCLUDEPATH *= $$GLEWPATH/include
+LIBS *= -L$$GLEWPATH/lib
+LIBS *= -lGLEW
 
 # vtk
+DEFINES += USE_VTK
 INCLUDEPATH += $$VTKPATH/include/vtk-$$VTKVERSION
 LIBS *= -L$$VTKPATH/lib
-DEFINES += USE_VTK
-
 LIBS += \
 -lvtkCommonCore-$$VTKVERSION \
 -lvtkCommonDataModel-$$VTKVERSION \

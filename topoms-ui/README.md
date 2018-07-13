@@ -11,29 +11,28 @@ analysis.
 
 ### Installation
 
-In addition to `TopoMS`, `TopoMS-UI` depends upon `Qt` and `QGLViewer`
-(http://libqglviewer.com/); compatible version is `libQGLViewer 2.7.1`.
-Once Qt and QGLViewer have been installed, you may use `cmake` or Qt's `qmake`
+In addition to `TopoMS`, `TopoMS-UI` depends upon `Qt 5.7`, `QGLViewer 2.7.1`
+(http://libqglviewer.com/), and `GLEW 2.1.0`.
+Once these depenencies are installed, you may use `cmake` or Qt's `qmake`
 system to build the tool.
 
 ```
 $ pwd
 TopoMS/topoms-ui
 $ mkdir build
-$ qmake -spec macx-g++ QMAKE_CXX=<path-to-gnu-c++> \  # this line needed only for Mac
-        INCLUDEPATH+=/usr/include \                   # this line needed only for Mac OS 10.13
-        QGLPATH=/Users/bhatia4/usr \
-        VTKPATH=/Users/bhatia4/usr VTKVERSION=7.1 ..
+$ cmake -DCMAKE_CXX_COMPILER=<path-to-gnu-c++> .. # compiler path needed only for Mac
 $ make
 ```
+If you are more comfortable using `qmake`, you may proceed as follows
 
-If you are more comfortable using `cmake`, you may proceed as follows
 ```
 $ pwd
 TopoMS/topoms-ui
 $ mkdir build
-$ cmake -DCMAKE_CXX_COMPILER=<path-to-gnu-c++> \  # this line needed only for Mac
-        -DQGLPATH=/Users/bhatia4/usr
+$ qmake -spec macx-g++ QMAKE_CXX=<path-to-gnu-c++> \  # this line needed only for Mac
+        QGLPATH=/Users/bhatia4/usr \
+        VTKPATH=/Users/bhatia4/usr VTKVERSION=7.1 \
+        ..
 $ make
 ```
 

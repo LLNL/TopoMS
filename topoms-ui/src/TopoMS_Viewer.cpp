@@ -381,7 +381,7 @@ void TopoMSViewer::init(){
     GLenum err = glewInit();
     GLEW_available = (GLEW_OK == err);
     if(!GLEW_available){
-        std::cout << "GLEW could not be loaded: " << glewGetErrorString(err) << endl;
+        std::cout << "GLEW could not be loaded: " << glewGetErrorString(err) << std::endl;
     }
 
     GLSL_available = glewIsSupported("GL_ARB_shader_objects GL_ARB_vertex_shader GL_ARB_fragment_shader");

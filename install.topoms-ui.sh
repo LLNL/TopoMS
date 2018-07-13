@@ -11,7 +11,10 @@ command -v cmake >/dev/null 2>&1 || { echo >&2 "Cannot find command 'cmake'. Abo
 if [ -n "${GNU_CXX}" ] ; then
   command -v "${GNU_CXX}" >/dev/null 2>&1 || { echo >&2 "Cannot find command '${GNU_CXX}'. Aborting."; exit 1;  }
   echo ''
-  echo 'Using' `"${GNU_CXX}"  --version | head -n1`
+  echo "Using" `"${GNU_CXX}"  --version | head -n1`:  `type gcc`
+else
+  echo ''
+  echo "Using" `gcc --version | head -n1`:  `type gcc`
 fi
 
 command -v qmake >/dev/null 2>&1 || { echo >&2 "Cannot find command 'qmake'. Aborting."; exit 1;  }
@@ -19,10 +22,7 @@ echo `qmake  --version | tail -n1`
 
 platform=`uname`
 if [ $platform == 'Darwin' ]; then
-  libextn='.dylib'
   alias qmake='qmake -spec macx-g++ INCLUDEPATH+=/usr/include'
-else
-  libextn='.so'
 fi
 
 # ------------------------------------------------------------------------------
@@ -61,21 +61,17 @@ VTK_VERSION='7.1'
 VTK_VERSION_BUILD='1'
 VTK_NAME='VTK-'$VTK_VERSION'.'$VTK_VERSION_BUILD
 
-# check for this lib file to decide if vtk is installed correctly
-# not the best way.. but works for now
-testfile=libvtkCommonCore-$VTK_VERSION$libextn
-testfile=$TopoMS_ROOT/external/lib/$testfile
-
-if [ ! -e $testfile ]; then
+testfile=$TopoMS_ROOT/external/lib/libvtkCommonCore-$VTK_VERSION*
+if ! ls $testfile 1> /dev/null 2>&1 ; then
   echo '  > '$VTK_NAME
 
-  if [ ! -e $VTK_NAME.tar.gz ]; then
+  if ! ls $VTK_NAME.tar.gz 1> /dev/null 2>&1 ; then
     echo '    > Downloading '$VTK_NAME
     rm $TopoMS_ROOT/external/vtk.download.log 2>/dev/null
     wget -o $TopoMS_ROOT/external/vtk.download.log https://www.vtk.org/files/release/$VTK_VERSION/$VTK_NAME.tar.gz
   fi
 
-  if [ ! -d $VTK_NAME ]; then
+  if ! ls $VTK_NAME 1> /dev/null 2>&1 ; then
     echo '    > Untarring the downloaded code'
     tar -xf $VTK_NAME.tar.gz
   fi
@@ -85,8 +81,8 @@ if [ ! -e $testfile ]; then
   cd $VTK_NAME/build
 
   echo '    > Configuring VTK'
-  rm $TopoMS_ROOT/external/vtk.cmake.log 2>/dev/null
-  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$TopoMS_ROOT/external \
+  cmake -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=$TopoMS_ROOT/external \
         .. > $TopoMS_ROOT/external/vtk.cmake.log
 
   echo '    > Building VTK'
@@ -96,7 +92,7 @@ if [ ! -e $testfile ]; then
   echo '    > Installing VTK'
   make install > $TopoMS_ROOT/external/vtk.make.log
 
-  if [ -e $testfile ]; then
+  if ls $testfile 1> /dev/null 2>&1 ; then
     echo '    > VTK successfully installed in '$TopoMS_ROOT'/external.'
   else
     echo '    > VTK build failed. Please check the build logs in '$TopoMS_ROOT'/external for more information.'
@@ -112,19 +108,17 @@ QGL_VERSION='2.7'
 QGL_VERSION_BUILD='1'
 QGL_NAME='libQGLViewer-'$QGL_VERSION'.'$QGL_VERSION_BUILD
 
-testfile='libQGLViewer.a'
-testfile=$TopoMS_ROOT/external/lib/$testfile
-
-if [ ! -e $testfile ]; then
+testfile=$TopoMS_ROOT/external/lib/libQGLViewer*
+if ! ls $testfile 1> /dev/null 2>&1 ; then
   echo '  > '$QGL_NAME
 
-  if [ ! -e $QGL_NAME.tar.gz ]; then
+  if ! ls $QGL_NAME.tar.gz 1> /dev/null 2>&1 ; then
     echo '    > Downloading '$QGL_NAME
     rm $TopoMS_ROOT/external/qgl.download.log 2>/dev/null
     wget -o $TopoMS_ROOT/external/qgl.download.log http://www.libqglviewer.com/src/$QGL_NAME.tar.gz
   fi
 
-  if [ ! -d $QGL_NAME ]; then
+  if ! ls $QGL_NAME 1> /dev/null 2>&1 ; then
     echo '    > Untarring the downloaded code'
     tar -xf $QGL_NAME.tar.gz
   fi
@@ -139,10 +133,12 @@ if [ ! -e $testfile ]; then
   if [ -n "${GNU_CXX}" ] ; then
     echo '    > CXX_COMPILER: '$GNU_CXX
     qmake QMAKE_CXX=$GNU_CXX \
+          QMAKE_CXXFLAGS+='-w' \
           QGLVIEWER_STATIC=yes PREFIX=$TopoMS_ROOT/external \
           ../QGLViewer  > $TopoMS_ROOT/external/qgl.qmake.log
   else
-    qmake QGLVIEWER_STATIC=yes PREFIX=$TopoMS_ROOT/external \
+    qmake QMAKE_CXXFLAGS+='-w' \
+          QGLVIEWER_STATIC=yes PREFIX=$TopoMS_ROOT/external \
           ../QGLViewer  > $TopoMS_ROOT/external/qgl.qmake.log
   fi
 
@@ -153,7 +149,7 @@ if [ ! -e $testfile ]; then
   echo '    > Installing QGLViewer'
   make install > $TopoMS_ROOT/external/qgl.make.log
 
-  if [ -e $testfile ]; then
+  if ls $testfile 1> /dev/null 2>&1 ; then
     echo '    > QGLViewer successfully installed in '$TopoMS_ROOT'/external.'
   else
     echo '    > QGLViewer build failed. Please check the build logs in '$TopoMS_ROOT'/external for more information.'
@@ -176,20 +172,16 @@ echo '    > Configuring TopoMS-UI'
 
 if [ -n "${GNU_CXX}" ] ; then
   echo '    > CXX_COMPILER: '$GNU_CXX
-  qmake QMAKE_CXX=$GNU_CXX \
-        QGLPATH=$TopoMS_ROOT/external \
-        VTKPATH=$TopoMS_ROOT/external VTKVERSION=$VTK_VERSION \
-        ../../topoms-ui > topoms-ui.qmake.log
+  cmake -DCMAKE_CXX_COMPILER=$GNU_CXX \
+        ../../topoms-ui > topoms-ui.cmake.log
 else
-  qmake QGLPATH=$TopoMS_ROOT/external \
-        VTKPATH=$TopoMS_ROOT/external VTKVERSION=$VTK_VERSION \
-        ../../topoms-ui > topoms-ui.qmake.log
+  cmake ../../topoms-ui > topoms-ui.cmake.log
 fi
 
 echo '    > Building TopoMS'
 make -j6 > topoms-ui.make.log
 
-if [ -e TopoMS-UI ]; then
+if ls TopoMS-UI 1> /dev/null 2>&1 ; then
   echo '    > TopoMS-UI successfully built in '`pwd`
 else
   echo '    > TopoMS-UI build failed. Please check the build logs in '`pwd`' for more information.'
