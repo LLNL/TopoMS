@@ -96,6 +96,7 @@ namespace MS {
         std::string m_charge_unit;
 
         // information about spatial domain
+        double m_scaling;
         double m_lattice_vectors[3][3];
         double m_lattice_origin[3];
         size_t m_grid_dims[3];
@@ -115,7 +116,7 @@ namespace MS {
         // constructor
         SystemInfo() : m_sysname("unknown"),
                         m_coordinate_type("unknown"), m_coordinate_unit("unknown"), m_charge_unit("unknown"),
-                        m_e_unit(1.0), m_l_unit(1.0),
+                        m_e_unit(1.0), m_l_unit(1.0), m_scaling(1.0),
                         m_num_tsteps(0), m_time_step(1.0), m_time_unit("unknown"), m_time_factor(0),
                         m_avg_atomic_vol(0), m_temperature(0) {
 
@@ -137,6 +138,7 @@ namespace MS {
                       << "    Lattice vector y = (" << m_lattice_vectors[1][0] << ", " << m_lattice_vectors[1][1] << ", " << m_lattice_vectors[1][2] << ") " << m_coordinate_unit << "\n"
                       << "    Lattice vector z = (" << m_lattice_vectors[2][0] << ", " << m_lattice_vectors[2][1] << ", " << m_lattice_vectors[2][2] << ") " << m_coordinate_unit << "\n"
                       << "    Lattice origin = (" << m_lattice_origin[0] << ", " << m_lattice_origin[1] << ", " << m_lattice_origin[2] << ")\n"
+                      << "    Lattice scaling = " << m_scaling << "\n"
                       << "    Lattice volume = " << this->volume() << " " << m_coordinate_unit << "^3\n"
                       << "    Grid = " << grid_sz() << " ["<< m_grid_dims[0] <<" x " << m_grid_dims[1] <<" x " << m_grid_dims[2] <<"]\n";
             print_time();

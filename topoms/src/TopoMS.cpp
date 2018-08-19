@@ -456,35 +456,48 @@ bool TopoMS::bader() {
         m_kdtree_atoms = MSC::kd_create(3);
 
         // add all atom positions (in grid coordinates) to a kdtree
-        for(int i = 0; i < num_atoms; i++) {
+        for(size_t atomIdx = 0; atomIdx < num_atoms; atomIdx++) {
 
             double gpos[3];
-            m_metadata.world_to_grid (m_atoms[i].m_pos, gpos);
-
-            kdtree_add(m_kdtree_atoms, gpos[0], gpos[1], gpos[2], i+1);    // VASP atom ids start with 1
+            m_metadata.world_to_grid (m_atoms[atomIdx].m_pos, gpos);
+            kdtree_add(m_kdtree_atoms, gpos[0], gpos[1], gpos[2], atomIdx+1);    // VASP atom ids start with 1
         }
 
         // now, use kdtree to find nearest atom to every extremum
-        for(int extIdx = 0; extIdx < extrema.size(); extIdx++){
+        for(size_t extIdx = 0; extIdx < extrema.size(); extIdx++){
 
             INDEX_TYPE vertIdx = extrema[extIdx];
 
             double fcoords[3];
             m_metadata.idx_to_grid(vertIdx, fcoords);
-
             int nearestAtomIdx = kdtree_query(m_kdtree_atoms, fcoords);
 
             if (nearestAtomIdx == -1) {
                 printf("TopoMS::bader(). Could not find nearest atom to (%f %f %f)\n", fcoords[0], fcoords[1], fcoords[2]);
             }
             else {
-                extrema2atoms.insert(std::make_pair( extIdx, nearestAtomIdx ));
+                extrema2atoms.insert(std::make_pair(extIdx, size_t(nearestAtomIdx)));
             }
         }
 
         printf(" Done!");
         ltimer.EndGlobal ();
         ltimer.PrintAll ();
+
+        // check if all atoms have been accounted for!
+        {
+            std::set<size_t> test_atoms;
+            for(auto iter = extrema2atoms.begin(); iter != extrema2atoms.end(); ++iter) {
+                test_atoms.insert(iter->second);
+            }
+            if (test_atoms.size() != num_atoms) {
+                std::cerr << " ERROR: mapping failed! " << num_atoms-test_atoms.size() << " fewer atoms mapped!\n";
+                for(auto iter = extrema2atoms.begin(); iter != extrema2atoms.end(); ++iter) {
+                    std::cout << "\t> extrema " << iter->first << " --> atom " << iter->second << std::endl;
+                }
+                exit(1);
+            }
+        }
     }
 
     // ---------------------------------------------------------------------

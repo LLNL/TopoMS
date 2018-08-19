@@ -179,7 +179,7 @@ private:
     std::vector<FLOATTYPE> chg_extrema, vol_extrema;
     std::vector<int> labels_atoms, labels_extrema;
 
-    std::map<int, int> extrema2atoms;
+    std::map<size_t, size_t> extrema2atoms;
 
     // ----------------------------------------------------------------------
     // msc-related variables

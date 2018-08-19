@@ -75,9 +75,10 @@ purposes.
 
 #include <vector>
 #include <string>
-#include <iostream>
-#include <fstream>
+#include <cctype>
 #include <cmath>
+#include <fstream>
+#include <iostream>
 
 #include "MolecularSystem.h"
 #include "Utils.h"
@@ -86,6 +87,16 @@ purposes.
 namespace MS {
 
     namespace VASP {
+
+        inline void remove_carriagereturn(std::string &str) {
+            if (str[str.length()-1] == '\r')  str = str.erase(str.length()-1, 1);
+        }
+        inline void rtrim(std::string &str) {
+            //remove_carriagereturn(str);
+            str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) {
+                return !std::isspace(ch);
+            }).base(), str.end());
+        }
 
         /**
           *   @brief  Read a VASP-type CHGCAR and AECCAR file
@@ -120,18 +131,18 @@ namespace MS {
 
             // read lattice
             std::getline(infile, mdata.m_sysname);
+            rtrim(mdata.m_sysname);
 
-            double scaling_factor;
             std::getline(infile, line);
-            sscanf(line.c_str(), "%lf", &scaling_factor);
+            sscanf(line.c_str(), "%lf", &mdata.m_scaling);
 
             for(unsigned int i = 0; i < 3; i++){
                 std::getline(infile, line);
                 sscanf(line.c_str(),"%lf %lf %lf", &mdata.m_lattice_vectors[i][0], &mdata.m_lattice_vectors[i][1], &mdata.m_lattice_vectors[i][2]);
 
-                mdata.m_lattice_vectors[i][0] *= scaling_factor;
-                mdata.m_lattice_vectors[i][1] *= scaling_factor;
-                mdata.m_lattice_vectors[i][2] *= scaling_factor;
+                mdata.m_lattice_vectors[i][0] *= mdata.m_scaling;
+                mdata.m_lattice_vectors[i][1] *= mdata.m_scaling;
+                mdata.m_lattice_vectors[i][2] *= mdata.m_scaling;
             }
 
             // read materials
@@ -142,7 +153,7 @@ namespace MS {
             mdata.m_materials.resize(tokens.size(), std::pair<std::string, unsigned int> ("", 0));
 
             // check if the files provided symbols!
-            if( !std::isdigit( tokens.front().at(0) ) ) {
+            if( !std::isdigit(tokens.front().at(0))) {
                 for(unsigned int i = 0; i < tokens.size(); i++){
                     mdata.m_materials[i].first = tokens[i];
                 }
@@ -160,6 +171,7 @@ namespace MS {
             // -----------------------------------------------------
             // read positions
             std::getline(infile, mdata.m_coordinate_type);     // read "Direct"
+            rtrim(mdata.m_coordinate_type);
 
             atoms.reserve(num_atoms);
 
@@ -173,7 +185,7 @@ namespace MS {
                 for(int j = prev; j < curr; j++) {
 
                     std::getline(infile, line);
-                    sscanf(line.c_str(), "%lf %lf %lf\n", &x, &y, &z);
+                    sscanf(line.c_str(), "%lf %lf %lf", &x, &y, &z);
 
                     atoms.push_back( Material(symb, x, y, z) );
                 }
