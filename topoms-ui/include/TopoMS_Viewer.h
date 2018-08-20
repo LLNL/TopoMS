@@ -279,6 +279,7 @@ END OF TERMS AND CONDITIONS
 
 #include <QGLViewer/qglviewer.h>
 #include "vsvr.h"
+#include "Vec3.h"
 
 class TopoMSApp;
 
@@ -294,6 +295,7 @@ class TopoMSViewer : public QGLViewer {
 
     size_t grid_dims[3];
     qglviewer::Vec bbox_min, bbox_max;
+    qglviewer::Vec lattice[3];
 
     VSVR *vsvr;
 
@@ -326,7 +328,30 @@ public:
         vsvr->tex_set_resolution(grid_dims[0], grid_dims[1], grid_dims[2]);
         vsvr->tex_set_extern(f);
     }
-    void set_dims(const size_t dims[]) {
+
+    void set_lattice(const Mat3<double> &lattice_mat, const Vec3<double> &origin, const Vec3<size_t> grid) {
+
+        for(uint8_t i = 0; i < 3; i++){
+            grid_dims[i] = grid[i];
+        }
+
+        for(uint i = 0; i < 3; i++){
+            lattice[i] = qglviewer::Vec(lattice_mat.v[i][0], lattice_mat.v[i][1], lattice_mat.v[i][2]);
+        }
+
+
+        bbox_min = qglviewer::Vec(origin[0], origin[1], origin[2]);
+        for(uint i = 0; i < 3; i++){
+            bbox_max[i] = std::max(lattice[0][i], lattice[1][i]);
+            bbox_max[i] = std::max(bbox_max[i], lattice[2][i]);
+            bbox_max[i] += bbox_min[i];
+        }
+
+        //std::cout << " bbox = " << bbox_max << std::endl;
+        set_bbox(bbox_min, bbox_max);
+    }
+
+    /*void set_dims(const size_t dims[]) {
 
         for(int i = 0; i < 3; i++){
             grid_dims[i] = dims[i];
@@ -334,7 +359,7 @@ public:
         bbox_min = qglviewer::Vec(0,0,0);
         bbox_max = qglviewer::Vec(grid_dims[0], grid_dims[1], grid_dims[2]);
         set_bbox(bbox_min, bbox_max);
-    }
+    }*/
 
 private:
 

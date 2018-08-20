@@ -76,12 +76,14 @@ purposes.
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 template <typename T>
 struct Vec3 {
+private:
     T v[3]; //x,y,z;
-
-    Vec3() {                v[0] = v[1] = v[2] = 0;         }
+public:
+    Vec3() {                v[0] = v[1] = v[2] = T(0);      }
     Vec3(T x, T y, T z) {   v[0] = x; v[1] = y; v[2] = z;   }
 
     T& operator[](int i) {              return v[i]; }
@@ -164,6 +166,101 @@ struct Vec3 {
         ires = ires + -1000;
         //ires.print_vi();
         return ires;
+    }
+};
+
+template <typename T=double>
+struct Mat3 {
+public:
+    T v[3][3];
+public:
+    Mat3() {
+        for(uint8_t i = 0; i < 3; i++)
+        for(uint8_t j = 0; j < 3; j++)
+            v[i][j] = T(0);
+    }
+
+    void eye() {
+        for(uint8_t i = 0; i < 3; i++)
+        for(uint8_t j = 0; j < 3; j++)
+            v[i][j] = T(0);
+
+        for(uint8_t i = 0; i < 3; i++)
+            v[i][i] = T(1);
+    }
+
+    //T& operator[](int i) {              return v[i]; }
+    //const T& operator[](int i) const {  return v[i]; }
+
+    bool is_eye() const {
+
+        Mat3<T> m;  m.eye();
+        for(uint8_t i = 0; i < 3; i++)
+        for(uint8_t j = 0; j < 3; j++){
+            if (fabs(v[i][j] - m.v[i][j]) > 0.0000001)
+                return false;
+        }
+        return true;
+    }
+
+    T determinant() const {
+        return   v[0][0]*(v[1][1]*v[2][2] - v[1][2]*v[2][1])
+               - v[0][1]*(v[1][0]*v[2][2] - v[1][2]*v[2][0])
+               + v[0][2]*(v[1][0]*v[2][1] - v[1][1]*v[2][1]);
+    }
+    Mat3 inverse() const {
+
+        Mat3 inv;
+        double det = determinant();
+        if (fabs(det) < 0.000001) {
+            std::cerr << "Cannot compute inverse for singular matrix!\n";
+            inv.eye();  return;
+        }
+
+        det = 1.0/det;
+        inv.v[0][0] = det*(v[1][1]*v[2][2] - v[1][2]*v[2][1]);
+        inv.v[0][1] = det*(v[0][2]*v[2][1] - v[0][1]*v[2][2]);
+        inv.v[0][2] = det*(v[0][1]*v[1][2] - v[0][2]*v[1][1]);
+        inv.v[1][0] = det*(v[1][2]*v[2][0] - v[1][0]*v[2][2]);
+        inv.v[1][1] = det*(v[0][0]*v[2][2] - v[0][2]*v[2][0]);
+        inv.v[1][2] = det*(v[0][2]*v[1][0] - v[0][0]*v[1][2]);
+        inv.v[2][0] = det*(v[1][0]*v[2][1] - v[1][1]*v[2][0]);
+        inv.v[2][1] = det*(v[0][1]*v[2][0] - v[0][0]*v[2][1]);
+        inv.v[2][2] = det*(v[0][0]*v[1][1] - v[0][1]*v[1][0]);
+        return inv;
+    }
+
+    void transform(const T in[3], T out[3]) const {
+        for(uint8_t d = 0; d < 3; d++){
+            out[d] = in[0]*v[0][d] + in[1]*v[1][d] + in[2]*v[2][d];
+        }
+    }
+    Vec3<T> transform(const T in[3]) const {
+        Vec3<T> out;
+        for(uint8_t d = 0; d < 3; d++){
+            out[d] = in[0]*v[0][d] + in[1]*v[1][d] + in[2]*v[2][d];
+        }
+        return out;
+    }
+    Vec3<T> transform(const Vec3<T> &in) const {
+        Vec3<T> out;
+        for(uint8_t d = 0; d < 3; d++){
+            out[d] = in[0]*v[0][d] + in[1]*v[1][d] + in[2]*v[2][d];
+        }
+        return out;
+    }
+
+    std::vector<T> linearize(bool homogenous = false) const {
+
+        const size_t sz = (homogenous) ? 4 : 3;
+        std::vector<T> mat (sz*sz, T(0));
+
+        for(uint8_t r = 0; r < 3; r++)
+        for(uint8_t c = 0; c < 3; c++)
+            mat[sz*c + r] = v[r][c];
+
+        if (homogenous) {   mat[15] = T(1); }
+        return mat;
     }
 };
 

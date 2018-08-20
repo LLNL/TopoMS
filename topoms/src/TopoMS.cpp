@@ -243,6 +243,10 @@ bool TopoMS::load(const std::string &configfilename) {
         m_config->grid_dims[i] = m_metadata.m_grid_dims[i];
 
     m_metadata.print ();
+    if (m_metadata.grid_sz() == 0) {
+        std::cerr << " Failed to read the input file correctly! got 0 grid values!\n";
+        exit(1);
+    }
 
     // ------------------------------------
     {
@@ -458,7 +462,7 @@ bool TopoMS::bader() {
         // add all atom positions (in grid coordinates) to a kdtree
         for(size_t atomIdx = 0; atomIdx < num_atoms; atomIdx++) {
 
-            double gpos[3];
+            float gpos[3];
             m_metadata.world_to_grid (m_atoms[atomIdx].m_pos, gpos);
             kdtree_add(m_kdtree_atoms, gpos[0], gpos[1], gpos[2], atomIdx+1);    // VASP atom ids start with 1
         }
@@ -847,10 +851,11 @@ bool TopoMS::msc() {
 
         for(size_t i = 0; i < m_atoms.size (); i++) {
 
-            double gpos[3];
+            float gpos[3];
             m_metadata.world_to_grid (m_atoms[i].m_pos, gpos);
 
-            int nearestIdx = kdtree_query(m_kdtree_minima, gpos);
+            double gdpos[3] = {gpos[0], gpos[1], gpos[2]};
+            int nearestIdx = kdtree_query(m_kdtree_minima, gdpos);
 
             if (nearestIdx == -1) {
                 printf("TopoMS::msc(). Could not find nearest node to atom (%f %f %f)\n", gpos[0], gpos[1], gpos[2]);
@@ -1155,9 +1160,9 @@ void TopoMS::write_bader_max2vol(const string &filename) const {
     vtkSmartPointer<vtkImageData> imageData = vtkSmartPointer<vtkImageData>::New();
 
     imageData->SetOrigin(0.0, 0.0, 0.0);
-    imageData->SetSpacing( m_metadata.m_lattice_vectors[0][0] / float(m_metadata.m_grid_dims[0]-1),
-                           m_metadata.m_lattice_vectors[1][1] / float(m_metadata.m_grid_dims[1]-1),
-                           m_metadata.m_lattice_vectors[2][2] / float(m_metadata.m_grid_dims[2]-1)
+    imageData->SetSpacing( m_metadata.m_lattice.v[0][0] / float(m_metadata.m_grid_dims[0]-1),
+                           m_metadata.m_lattice.v[1][1] / float(m_metadata.m_grid_dims[1]-1),
+                           m_metadata.m_lattice.v[2][2] / float(m_metadata.m_grid_dims[2]-1)
                          );
     imageData->SetDimensions( m_metadata.m_grid_dims[0], m_metadata.m_grid_dims[1], m_metadata.m_grid_dims[2] );
     imageData->AllocateScalars(VTK_INT, 1);
@@ -1199,10 +1204,11 @@ void TopoMS::write_bader_atoms2vol(const string &filename) const {
 
     vtkSmartPointer<vtkImageData> imageData = vtkSmartPointer<vtkImageData>::New();
 
+    // TODO: for non-cube lattice, need to handle this
     imageData->SetOrigin(0.0, 0.0, 0.0);
-    imageData->SetSpacing( m_metadata.m_lattice_vectors[0][0] / float(m_metadata.m_grid_dims[0]-1),
-                           m_metadata.m_lattice_vectors[1][1] / float(m_metadata.m_grid_dims[1]-1),
-                           m_metadata.m_lattice_vectors[2][2] / float(m_metadata.m_grid_dims[2]-1)
+    imageData->SetSpacing( m_metadata.m_lattice.v[0][0] / float(m_metadata.m_grid_dims[0]-1),
+                           m_metadata.m_lattice.v[1][1] / float(m_metadata.m_grid_dims[1]-1),
+                           m_metadata.m_lattice.v[2][2] / float(m_metadata.m_grid_dims[2]-1)
                          );
     imageData->SetDimensions( m_metadata.m_grid_dims[0], m_metadata.m_grid_dims[1], m_metadata.m_grid_dims[2] );
     imageData->AllocateScalars(VTK_INT, 1);
@@ -1266,10 +1272,10 @@ void TopoMS::write_mgraph(const std::string &filename) const {
         this->get_msc_node(m_nodes[i], ndim, ncidx, coord);
 
         // get_msc_node returns MSC grid coordinates (twice the actual value)
-        points->InsertNextPoint( 0.5*this->m_metadata.grid_to_world(coord[0], 0),
-                                 0.5*this->m_metadata.grid_to_world(coord[1], 1),
-                                 0.5*this->m_metadata.grid_to_world(coord[2], 2)
-                                );
+        float gcoord[3] = {0.5*coord[0], 0.5*coord[1], 0.5*coord[2]};
+        float wcoord[3] = {0,0,0};
+        this->m_metadata.grid_to_world(gcoord, wcoord);
+        points->InsertNextPoint(wcoord[0], wcoord[1], wcoord[2]);
 
         vtkSmartPointer<vtkVertex> cPnt = vtkSmartPointer<vtkVertex>::New();
         cPnt->GetPointIds()->InsertNextId(points->GetNumberOfPoints()-1);
@@ -1302,10 +1308,11 @@ void TopoMS::write_mgraph(const std::string &filename) const {
                 }
             }
 
-            points->InsertNextPoint( this->m_metadata.grid_to_world(path[pidx][0], 0),
-                                     this->m_metadata.grid_to_world(path[pidx][1], 1),
-                                     this->m_metadata.grid_to_world(path[pidx][2], 2)
-                                    );
+            float gcoord[3] = {path[pidx][0], path[pidx][1], path[pidx][2]};
+            float wcoord[3];
+            this->m_metadata.grid_to_world(gcoord, wcoord);
+            points->InsertNextPoint(wcoord[0], wcoord[1], wcoord[2]);
+
             pDims->InsertNextValue(6);
             polyLine->GetPointIds()->InsertNextId(points->GetNumberOfPoints()-1);
         }

@@ -370,7 +370,8 @@ bool TopoMSApp::initialize(QString configfilename) {
         m_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
     }
 
-    m_viewer->set_dims(m_mdlayer->get_gridDims());
+    //m_viewer->set_dims(m_mdlayer->get_gridDims());
+    m_viewer->set_lattice(m_mdlayer->m_metadata.m_lattice, m_mdlayer->m_metadata.m_lattice_origin, m_mdlayer->m_metadata.m_grid_dims);
     m_viewer->set_volrendTransferFunction(m_plot->tfunc, m_plot->tfsize);
 
     QObject::connect(m_plot, SIGNAL(tfunc_updated()), this, SLOT(tfunc_updated()));
@@ -396,6 +397,11 @@ bool TopoMSApp::initialize(QString configfilename) {
     if (m_mdlayer->msc() == false){
         this->ui.groupBox_graph->setEnabled(false);
         this->ui.groupBox_topo->setEnabled(false);
+    }
+    if( !m_mdlayer->m_metadata.m_lattice.is_eye() ) {
+        std::cerr << "Volume rendering currently not supported for non-cuboidal lattice!\n";
+        this->ui.cb_volRend->setChecked(false);
+        this->ui.cb_volRend->setEnabled(false);
     }
 }
 

@@ -296,9 +296,12 @@ void TopoMSViewer::set_bbox(const qglviewer::Vec &bbox_min, const qglviewer::Vec
     this->camera()->centerScene();
     this->camera()->showEntireScene();
 
+    std::cout << " setting bounding box: "<<"["<< bbox_min <<"] ["<<bbox_max<<"]\n";
     GLfloat lightPos[] = {(GLfloat)bbox_max[0], (GLfloat)bbox_max[1], (GLfloat)bbox_max[2], 0.0f };
     glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
 }
+
+
 
 void TopoMSViewer::printGLStatus() {
 
@@ -440,20 +443,20 @@ void TopoMSViewer::draw_atoms(bool with_names){
 
     if(atoms.empty())
         return;
-
+/*
     // linear scaling of opengl matrices to draw in world coordinates
     glPushMatrix();
 
-    glScalef( (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[0] / parentApp->m_mdlayer->m_metadata.m_lattice_vectors[0][0],
-              (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[1] / parentApp->m_mdlayer->m_metadata.m_lattice_vectors[1][1],
-              (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[2] / parentApp->m_mdlayer->m_metadata.m_lattice_vectors[2][2]
+    glScalef( (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[0] / parentApp->m_mdlayer->m_metadata.m_lattice.v[0][0],
+              (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[1] / parentApp->m_mdlayer->m_metadata.m_lattice.v[1][1],
+              (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[2] / parentApp->m_mdlayer->m_metadata.m_lattice.v[2][2]
             );
     glTranslatef( -1*parentApp->m_mdlayer->m_metadata.m_lattice_origin[0],
                   -1*parentApp->m_mdlayer->m_metadata.m_lattice_origin[1],
                   -1*parentApp->m_mdlayer->m_metadata.m_lattice_origin[2]
                 );
-
-    float factor = parentApp->ui.dsb_atom->value();
+*/
+    float factor = 0.5*parentApp->ui.dsb_atom->value();
 
     size_t num_atoms = atoms.size();
     for(int i = 0; i < num_atoms; i++) {
@@ -469,7 +472,7 @@ void TopoMSViewer::draw_atoms(bool with_names){
         }
     }
 
-    glPopMatrix();
+    //glPopMatrix();
 }
 
 void TopoMSViewer::draw_extrema() {
@@ -485,7 +488,10 @@ void TopoMSViewer::draw_extrema() {
         float fcoords[3];
         parentApp->m_mdlayer->m_metadata.idx_to_grid(cellIdx, fcoords);
 
-        draw_sphere(fcoords[0], fcoords[1], fcoords[2], Colorator::by_topoIndex(0), factor);
+        float wcoords[3];
+        parentApp->m_mdlayer->m_metadata.grid_to_world(fcoords, wcoords);
+
+        draw_sphere(wcoords[0], wcoords[1], wcoords[2], Colorator::by_topoIndex(0), factor);
     }
 }
 
@@ -508,7 +514,11 @@ void TopoMSViewer::draw_paths() {
                 glEnd();
                 glBegin(GL_LINE_STRIP);
             }
-            glVertex3f(pline.at(i)[0], pline.at(i)[1], pline.at(i)[2]);
+
+            float gcoords[3] = {pline.at(i)[0], pline.at(i)[1], pline.at(i)[2]};
+            float wcoords[3];
+            parentApp->m_mdlayer->m_metadata.grid_to_world(gcoords, wcoords);
+            glVertex3f(wcoords[0], wcoords[1], wcoords[2]);
         }
         glEnd();
     }
@@ -519,13 +529,12 @@ void TopoMSViewer::draw_nodes(bool with_names) {
 
     size_t natoms = this->parentApp->m_mdlayer->m_atoms.size();
 
-    const float factor = parentApp->ui.dsb_cp->value();
+    const float factor = 0.2*parentApp->ui.dsb_cp->value();
     const std::vector<INT_TYPE> &nodes = this->parentApp->m_mdlayer->m_nodes;
 
     size_t nnodes = nodes.size();
 
     for(int i = 0; i < nnodes; i++) {
-
 
         int ndim;
         INDEX_TYPE ncidx;
@@ -540,9 +549,15 @@ void TopoMSViewer::draw_nodes(bool with_names) {
             glPushName(natoms + nodes[i]);
         }
 
-        MSC::Vec3d fcoord = coord;
-        fcoord *= 0.5;
-        draw_sphere( fcoord[0], fcoord[1], fcoord[2], Colorator::by_topoIndex(ndim), factor);
+        //MSC::Vec3d fcoord = coord;
+        //fcoord *= 0.5;
+
+        float gcoords[3] = {0.5*float(coord[0]), 0.5*float(coord[1]), 0.5*float(coord[2])};
+        float wcoords[3];
+        parentApp->m_mdlayer->m_metadata.grid_to_world(gcoords, wcoords);
+
+        draw_sphere( wcoords[0], wcoords[1], wcoords[2], Colorator::by_topoIndex(ndim), factor);
+        //draw_sphere( fcoord[0], fcoord[1], fcoord[2], Colorator::by_topoIndex(ndim), factor);
 
         if(with_names) {
             glPopName();
@@ -552,13 +567,11 @@ void TopoMSViewer::draw_nodes(bool with_names) {
 
 void TopoMSViewer::draw() {
 
-    {
-    glColor3f(0,0,0);
-    draw_bBox(this->bbox_min, this->bbox_max);
-    }
-
     if (!parentApp)                 return;
     if (!parentApp->m_mdlayer)      return;
+
+
+    draw_unitCell(bbox_min, lattice[0], lattice[1], lattice[2], Qt::black, Qt::black, Qt::black);
 
     if(parentApp->show_atoms()){
         draw_atoms(false);
@@ -580,9 +593,9 @@ void TopoMSViewer::draw() {
             draw_paths();
         }
     }
-    if(parentApp->show_volRendering()){
+    /*if(parentApp->show_volRendering()){
         render_volume();
-    }
+    }*/
 }
 
 void TopoMSViewer::drawWithNames(){

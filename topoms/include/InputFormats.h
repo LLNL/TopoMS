@@ -138,12 +138,14 @@ namespace MS {
 
             for(unsigned int i = 0; i < 3; i++){
                 std::getline(infile, line);
-                sscanf(line.c_str(),"%lf %lf %lf", &mdata.m_lattice_vectors[i][0], &mdata.m_lattice_vectors[i][1], &mdata.m_lattice_vectors[i][2]);
+                sscanf(line.c_str(),"%lf %lf %lf", &mdata.m_lattice.v[i][0], &mdata.m_lattice.v[i][1], &mdata.m_lattice.v[i][2]);
 
-                mdata.m_lattice_vectors[i][0] *= mdata.m_scaling;
-                mdata.m_lattice_vectors[i][1] *= mdata.m_scaling;
-                mdata.m_lattice_vectors[i][2] *= mdata.m_scaling;
+                mdata.m_lattice.v[i][0] *= mdata.m_scaling;
+                mdata.m_lattice.v[i][1] *= mdata.m_scaling;
+                mdata.m_lattice.v[i][2] *= mdata.m_scaling;
             }
+
+            mdata.invert_lattice();
 
             // read materials
             std::getline(infile, line);
@@ -202,28 +204,33 @@ namespace MS {
             mdata.m_coordinate_unit = "Angs";
 
             // read grid dimensions
-            std::getline(infile, line);
-            if(line.length() <= 1){
+            while(true) {
                 std::getline(infile, line);
+                rtrim(line);
+                if(line.length() >= 2)
+                    break;
             }
 
             sscanf(line.c_str(),"%d %d %d", &mdata.m_grid_dims[0], &mdata.m_grid_dims[1], &mdata.m_grid_dims[2]);
+            
+            // VASP write 5 values in each line, and rounds off the last line 0
+            const size_t nvalues = mdata.grid_sz();
+            //size_t nlines = size_t(ceil(float(nvalues) / 5.0f));
 
             // read values
             size_t idx = 0;
+            T *values = new T[nvalues];
 
-            T *values = new T[mdata.grid_sz()];
+            while(true) {
 
-            while(idx < mdata.grid_sz()){
-
+                if (idx == nvalues) break;
                 std::getline(infile, line);
-                if(line.empty()){
-                    break;
-                }
+                if(line.empty())    break;
 
                 std::vector<std::string> tokens = Utils::tokenize(line);
                 for(unsigned int i = 0; i < tokens.size(); i++){
                     values[idx++] = atof(tokens[i].c_str());
+                    if (idx == nvalues) break;
                 }
             }
 
@@ -257,7 +264,7 @@ namespace MS {
             fprintf(outfile, "%16f\n", 1.0);
 
             for(unsigned int i = 0; i < 3; i++){
-                fprintf(outfile, "%14.6f %14.6f %14.6f\n", mdata.m_lattice_vectors[i][0], mdata.m_lattice_vectors[i][1], mdata.m_lattice_vectors[i][2]);
+                fprintf(outfile, "%14.6f %14.6f %14.6f\n", mdata.m_lattice.v[i][0], mdata.m_lattice.v[i][1], mdata.m_lattice.v[i][2]);
             }
 
             // write materials
@@ -353,12 +360,13 @@ namespace MS {
                     }
                 }
 
-                mdata.m_lattice_vectors[i][0] = (double)mdata.m_grid_dims[i] * dx;
-                mdata.m_lattice_vectors[i][1] = (double)mdata.m_grid_dims[i] * dy;
-                mdata.m_lattice_vectors[i][2] = (double)mdata.m_grid_dims[i] * dz;
+                mdata.m_lattice.v[i][0] = (double)mdata.m_grid_dims[i] * dx;
+                mdata.m_lattice.v[i][1] = (double)mdata.m_grid_dims[i] * dy;
+                mdata.m_lattice.v[i][2] = (double)mdata.m_grid_dims[i] * dz;
             }
 
             mdata.m_coordinate_type = "World";
+            mdata.invert_lattice();
 
             // now read atom locations
             atoms.reserve(num_atoms);
@@ -370,14 +378,14 @@ namespace MS {
                 std::getline(infile, line);
                 sscanf(line.c_str(),"%d %lf %lf %lf %lf", &n, &chg, &x, &y, &z);
 
-                if(x >= (mdata.m_lattice_origin[0] + mdata.m_lattice_vectors[0][0]))
-                    x -= mdata.m_lattice_vectors[0][0];
+                if(x >= (mdata.m_lattice_origin[0] + mdata.m_lattice.v[0][0]))
+                    x -= mdata.m_lattice.v[0][0];
 
-                if(y >= (mdata.m_lattice_origin[1] + mdata.m_lattice_vectors[1][1]))
-                    y -= mdata.m_lattice_vectors[1][1];
+                if(y >= (mdata.m_lattice_origin[1] + mdata.m_lattice.v[1][1]))
+                    y -= mdata.m_lattice.v[1][1];
 
-                if(z > (mdata.m_lattice_origin[2] + mdata.m_lattice_vectors[2][2])){
-                    z -= mdata.m_lattice_vectors[2][2];
+                if(z > (mdata.m_lattice_origin[2] + mdata.m_lattice.v[2][2])){
+                    z -= mdata.m_lattice.v[2][2];
                 }
                 atoms.push_back( Material(n, chg, x, y, z));
             }

@@ -77,6 +77,7 @@ purposes.
 #include <string>
 #include <cmath>
 #include <iostream>
+#include "Vec3.h"
 
 namespace MS {
 
@@ -97,9 +98,10 @@ namespace MS {
 
         // information about spatial domain
         double m_scaling;
-        double m_lattice_vectors[3][3];
-        double m_lattice_origin[3];
-        size_t m_grid_dims[3];
+        Vec3<double> m_lattice_origin;
+        Mat3<double> m_lattice;
+        Mat3<double> m_lattice_inv;
+        Vec3<size_t> m_grid_dims;
 
         std::string m_coordinate_type;    // direct, world, grid ?   (useful only for VASP)
 
@@ -119,26 +121,20 @@ namespace MS {
                         m_e_unit(1.0), m_l_unit(1.0), m_scaling(1.0),
                         m_num_tsteps(0), m_time_step(1.0), m_time_unit("unknown"), m_time_factor(0),
                         m_avg_atomic_vol(0), m_temperature(0) {
-
-            for(unsigned int i = 0; i < 3; i++){
-                m_grid_dims[i] = 0;
-                m_lattice_origin[i] = 0.0;
-                for(unsigned int j = 0; j < 3; j++){
-                    m_lattice_vectors[i][j] = 1.0;
-                    m_lattice_vectors[i][(j+1)%3] = 0.0;
-                    m_lattice_vectors[i][(j+2)%3] = 0.0;
-                }
-            }
+            m_lattice.eye();
+            m_lattice_inv.eye();
         }
 
         // some simple utils for metadata
         void print() const {
             std::cout << "    System name = <" << m_sysname <<">\n";
-            std::cout << "    Lattice vector x = (" << m_lattice_vectors[0][0] << ", " << m_lattice_vectors[0][1] << ", " << m_lattice_vectors[0][2] << ") " << m_coordinate_unit << "\n"
-                      << "    Lattice vector y = (" << m_lattice_vectors[1][0] << ", " << m_lattice_vectors[1][1] << ", " << m_lattice_vectors[1][2] << ") " << m_coordinate_unit << "\n"
-                      << "    Lattice vector z = (" << m_lattice_vectors[2][0] << ", " << m_lattice_vectors[2][1] << ", " << m_lattice_vectors[2][2] << ") " << m_coordinate_unit << "\n"
+            std::cout << "    Lattice vector x = (" << m_lattice.v[0][0] << ", " << m_lattice.v[0][1] << ", " << m_lattice.v[0][2] << ") " << m_coordinate_unit << "\n"
+                      << "    Lattice vector y = (" << m_lattice.v[1][0] << ", " << m_lattice.v[1][1] << ", " << m_lattice.v[1][2] << ") " << m_coordinate_unit << "\n"
+                      << "    Lattice vector z = (" << m_lattice.v[2][0] << ", " << m_lattice.v[2][1] << ", " << m_lattice.v[2][2] << ") " << m_coordinate_unit << "\n"
+                    //<< "    Lattice vector x = (" << m_lattice_inv.v[0][0] << ", " << m_lattice_inv.v[0][1] << ", " << m_lattice_inv.v[0][2] << ") " << m_coordinate_unit << "\n"
+                    //<< "    Lattice vector y = (" << m_lattice_inv.v[1][0] << ", " << m_lattice_inv.v[1][1] << ", " << m_lattice_inv.v[1][2] << ") " << m_coordinate_unit << "\n"
+                    //<< "    Lattice vector z = (" << m_lattice_inv.v[2][0] << ", " << m_lattice_inv.v[2][1] << ", " << m_lattice_inv.v[2][2] << ") " << m_coordinate_unit << "\n"
                       << "    Lattice origin = (" << m_lattice_origin[0] << ", " << m_lattice_origin[1] << ", " << m_lattice_origin[2] << ")\n"
-                      << "    Lattice scaling = " << m_scaling << "\n"
                       << "    Lattice volume = " << this->volume() << " " << m_coordinate_unit << "^3\n"
                       << "    Grid = " << grid_sz() << " ["<< m_grid_dims[0] <<" x " << m_grid_dims[1] <<" x " << m_grid_dims[2] <<"]\n";
             print_time();
@@ -154,41 +150,45 @@ namespace MS {
             // grid   :: in range [0, grid_dims]
             // world  :: in range [lattice_origins, lattice_origins+lattice_vectors]
 
-        inline float direct_to_grid(float in_directc, unsigned int d = 0) const {   return in_directc * m_grid_dims[d];   }
-        inline float grid_to_direct(float in_gridc, unsigned int d = 0) const {     return in_gridc / m_grid_dims[d];     }
-
-        inline float direct_to_world(float in_directc, unsigned int d = 0) const {  return in_directc * m_lattice_vectors[d][d] + m_lattice_origin[d] ;  }
-        inline float world_to_direct(float in_worldc, unsigned int d = 0) const {   return (in_worldc - m_lattice_origin[d]) / m_lattice_vectors[d][d];  }
-
-        inline float grid_to_world(float in_gridc, unsigned int d = 0) const {      return direct_to_world( grid_to_direct(in_gridc, d), d );            }
-        inline float world_to_grid(float in_worldc, unsigned int d = 0) const {     return direct_to_grid( world_to_direct(in_worldc, d), d );           }
+        void invert_lattice() { m_lattice_inv = m_lattice.inverse();    }
 
         inline void direct_to_grid(const float in_directc[3], float out_gridc[3]) const {
-            for(unsigned int d=0; d<3; d++)     out_gridc[d] = direct_to_grid(in_directc[d], d);
+            for(uint8_t d = 0; d < 3; d++)      out_gridc[d] = in_directc[d] * m_grid_dims[d];
         }
         inline void grid_to_direct(const float in_gridc[3], float out_directc[3]) const {
-            for(unsigned int d=0; d<3; d++)     out_directc[d] = grid_to_direct(in_gridc[d], d);
+            for(uint8_t d = 0; d < 3; d++)      out_directc[d] = in_gridc[d] / m_grid_dims[d];
         }
 
         inline void direct_to_world(const float in_directc[3], float out_worldc[3]) const {
-            for(unsigned int d=0; d<3; d++)     out_worldc[d] = direct_to_world(in_directc[d], d);
+            for(uint8_t d = 0; d < 3; d++){
+                out_worldc[d] = in_directc[0]*m_lattice.v[0][d] +
+                                in_directc[1]*m_lattice.v[1][d] +
+                                in_directc[2]*m_lattice.v[2][d] +
+                                m_lattice_origin[d];
+            }
         }
         inline void world_to_direct(const float in_worldc[3], float out_directc[3]) const {
-            for(unsigned int d=0; d<3; d++)     out_directc[d] = world_to_direct(in_worldc[d], d);
+            for(uint8_t d = 0; d < 3; d++){
+                out_directc[d] = in_worldc[0]*m_lattice_inv.v[0][d] +
+                                 in_worldc[1]*m_lattice_inv.v[1][d] +
+                                 in_worldc[2]*m_lattice_inv.v[2][d] -
+                                 m_lattice_origin[d];
+            }
         }
 
         inline void grid_to_world(const float in_gridc[3], float out_worldc[3]) const {
-            for(unsigned int d=0; d<3; d++)     out_worldc[d] = grid_to_world(in_gridc[d], d);
+            float directc[3];
+            grid_to_direct(in_gridc, directc);
+            direct_to_world(directc, out_worldc);
         }
         inline void world_to_grid(const float in_worldc[3], float out_gridc[3]) const {
-            for(unsigned int d=0; d<3; d++)     out_gridc[d] = world_to_grid(in_worldc[d], d);
+            float directc[3];
+            world_to_direct(in_worldc, directc);
+            direct_to_grid(directc, out_gridc);
         }
-        inline void world_to_grid(const float in_worldc[3], double out_gridc[3]) const {
-            for(unsigned int d=0; d<3; d++)     out_gridc[d] = world_to_grid(in_worldc[d], d);
-        }
-
-        inline void world_dims(float worldc[3]) const {
-            for(unsigned int d=0; d<3; d++)     worldc[d] = grid_to_world(m_grid_dims[d], d);
+        inline void world_dims(float wdims[3]) const {
+            float ddims[3] = {1,1,1};
+            direct_to_world(ddims, wdims);
         }
 
         template<typename T>
@@ -206,12 +206,7 @@ namespace MS {
         }
 
         inline size_t grid_sz() const {     return m_grid_dims[0]*m_grid_dims[1]*m_grid_dims[2];    }
-
-        inline double volume() const {
-            return fabs(m_lattice_vectors[0][0]*(m_lattice_vectors[1][1]*m_lattice_vectors[2][2] - m_lattice_vectors[1][2]*m_lattice_vectors[2][1])
-                      - m_lattice_vectors[0][1]*(m_lattice_vectors[1][0]*m_lattice_vectors[2][2] - m_lattice_vectors[1][2]*m_lattice_vectors[2][0])
-                      + m_lattice_vectors[0][2]*(m_lattice_vectors[1][0]*m_lattice_vectors[2][1] - m_lattice_vectors[1][1]*m_lattice_vectors[2][1]));
-        }
+        inline double volume() const {      return fabs(m_lattice.determinant());                   }
 
         // -----------------------------------------------------------------------------
         // -----------------------------------------------------------------------------
