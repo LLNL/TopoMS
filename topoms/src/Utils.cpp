@@ -76,8 +76,8 @@ purposes.
 
 #include <iterator>
 
-#define WIN32
-#ifndef WIN32
+
+#ifndef _WIN32
 #include <unistd.h>
 #include <sys/ioctl.h>
 #endif
@@ -86,7 +86,7 @@ purposes.
 
 void Utils::print_separator(unsigned int n) {
 
-#ifndef WIN32
+#ifndef _WIN32
 	struct winsize w;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
     n = w.ws_col;
