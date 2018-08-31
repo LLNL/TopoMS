@@ -75,16 +75,24 @@ purposes.
 #include <iostream>
 
 #include <iterator>
+
+#define WIN32
+#ifndef WIN32
 #include <unistd.h>
 #include <sys/ioctl.h>
+#endif
 
 #include "Utils.h"
 
 void Utils::print_separator(unsigned int n) {
 
-    struct winsize w;
+#ifndef WIN32
+	struct winsize w;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
     n = w.ws_col;
+#else
+	n = 20;
+#endif
 
     for(int i=0; i<n; i++) printf("-");
     printf("\n");

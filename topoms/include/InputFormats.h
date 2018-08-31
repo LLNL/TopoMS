@@ -78,6 +78,7 @@ purposes.
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <cctype>
 
 #include "MolecularSystem.h"
 #include "Utils.h"

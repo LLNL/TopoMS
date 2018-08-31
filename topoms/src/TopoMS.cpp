@@ -105,6 +105,8 @@ purposes.
 #include "msc_selectors.h"
 #include "numeric_streamline_integrator.h"
 
+#include <functional>
+
 // -----------------------------------------------------------------------------------------
 // these wrappers are needed so rest of the code remains independent of the MSC headers
 // -----------------------------------------------------------------------------------------
@@ -138,6 +140,7 @@ bool TopoMS::get_msc_node(size_t idx, int &dim, INDEX_TYPE &cellIdx, MSC::Vec3l 
     }
     cellIdx = n.cellindex;
     m_tgrid->cellid2Coords(cellIdx, ncoords);
+	return true;
 }
 
 const std::vector<INDEX_TYPE> TopoMS::get_extrema() const {
@@ -199,6 +202,7 @@ bool TopoMS::kdtree_add(MSC::kdtree* kt, double x, double y, double z, int data)
 
         kd_insert(kt, kpos, kdata);
     }
+	return true;
 }
 
 int TopoMS::kdtree_query(MSC::kdtree *kt, const double pos[3]) const {
@@ -298,6 +302,7 @@ bool TopoMS::init() {
     printf("\n =====>> TopoMS initialized!");
     timer.EndGlobal ();
     timer.PrintAll ();
+	return true;
 }
 
 /**

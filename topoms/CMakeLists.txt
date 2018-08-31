@@ -5,9 +5,9 @@ enable_language(CXX)
 project(TopoMS CXX)
 set(CMAKE_BUILD_TYPE Release)
 
-if(NOT CMAKE_COMPILER_IS_GNUCXX)
-  message(FATAL_ERROR "TopoMS requires a GNU compiler. CMake will fail.")
-endif()
+# if(NOT CMAKE_COMPILER_IS_GNUCXX)
+  # message(FATAL_ERROR "TopoMS requires a GNU compiler. CMake will fail.")
+# endif()
 
 ## Compiler flags
 set(CMAKE_CXX_FLAGS         "-O3")                         ## Optimize
