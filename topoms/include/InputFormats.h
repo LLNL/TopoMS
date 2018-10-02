@@ -73,33 +73,23 @@ purposes.
 #ifndef _INPUT_FORMATS_H_
 #define _INPUT_FORMATS_H_
 
+#include <cmath>
 #include <vector>
 #include <string>
 #include <cctype>
-#include <cmath>
 #include <fstream>
 #include <iostream>
 
-#include "MolecularSystem.h"
 #include "Utils.h"
 #include "Material.h"
+#include "MolecularSystem.h"
 
 namespace MS {
 
     namespace VASP {
 
-        inline void remove_carriagereturn(std::string &str) {
-            if (str[str.length()-1] == '\r')  str = str.erase(str.length()-1, 1);
-        }
-        inline void rtrim(std::string &str) {
-            //remove_carriagereturn(str);
-            str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) {
-                return !std::isspace(ch);
-            }).base(), str.end());
-        }
-
         /**
-          *   @brief  Read a VASP-type CHGCAR and AECCAR file
+          *   @brief  Read a VASP CAR file: CHGCAR, AECCAR, LOCPOT
           *
           *   @param  filename is the input filename
           *   @param  mdata is the metadata about the system
@@ -108,35 +98,34 @@ namespace MS {
           *   @return array of function values
           */
         template <typename T>
-        T* read_CHGCAR(const std::string &filename, MS::SystemInfo &mdata, std::vector<Material> &atoms) {
+        T* read_CAR(const std::string &filename, MS::SystemInfo &mdata, std::vector<Material> &atoms) {
 
             std::ifstream infile(filename.c_str());
             if(!infile.is_open()){
-                std::cerr << " MD::VASP::read_CHGCAR -- Could not open file " << filename << std::endl;
+                std::cerr << " MD::VASP::read_CAR -- Could not open file " << filename << std::endl;
                 exit(1);
-                return 0;
             }
 
             // -----------------------------------------------------
-            std::cout << " Reading CHGCAR " << filename << "...";
+            std::cout << " Reading VASP CAR file (" << filename << ")...";
             fflush(stdout);
 
             std::string line;
 
-            mdata.m_l_unit = 1.0;   mdata.m_coordinate_unit = "Angstrom";
-            mdata.m_e_unit = 1.0;   mdata.m_charge_unit = "eV";
+            mdata.m_length_unit = "Ang";   mdata.m_length_file2Angs = 1.0;
+            mdata.m_charge_unit = "eV";    mdata.m_charge_file2electrons = 1.0;
 
             // -----------------------------------------------------
             // CAR header
 
             // read lattice
             std::getline(infile, mdata.m_sysname);
-            rtrim(mdata.m_sysname);
+            Utils::rtrim(mdata.m_sysname);
 
             std::getline(infile, line);
             sscanf(line.c_str(), "%lf", &mdata.m_scaling);
 
-            for(unsigned int i = 0; i < 3; i++){
+            for(uint8_t i = 0; i < 3; i++){
                 std::getline(infile, line);
                 sscanf(line.c_str(),"%lf %lf %lf", &mdata.m_lattice.v[i][0], &mdata.m_lattice.v[i][1], &mdata.m_lattice.v[i][2]);
 
@@ -156,7 +145,7 @@ namespace MS {
 
             // check if the files provided symbols!
             if( !std::isdigit(tokens.front().at(0))) {
-                for(unsigned int i = 0; i < tokens.size(); i++){
+                for(size_t i = 0; i < tokens.size(); i++){
                     mdata.m_materials[i].first = tokens[i];
                 }
 
@@ -165,7 +154,7 @@ namespace MS {
             }
 
             // read the counts
-            for(unsigned int i = 0; i < tokens.size(); i++){
+            for(size_t i = 0; i < tokens.size(); i++){
                 mdata.m_materials[i].second = atoi(tokens[i].c_str());
                 num_atoms += mdata.m_materials[i].second;
             }
@@ -173,18 +162,18 @@ namespace MS {
             // -----------------------------------------------------
             // read positions
             std::getline(infile, mdata.m_coordinate_type);     // read "Direct"
-            rtrim(mdata.m_coordinate_type);
+            Utils::rtrim(mdata.m_coordinate_type);
 
             atoms.reserve(num_atoms);
 
             double x, y, z;
-            int prev = 0;
-            for(int i = 0; i < mdata.m_materials.size(); i++) {
+            size_t prev = 0;
+            for(size_t i = 0; i < mdata.m_materials.size(); i++) {
 
-                int curr = mdata.m_materials[i].second;
+                size_t curr = mdata.m_materials[i].second;
                 std::string symb = mdata.m_materials[i].first;
 
-                for(int j = prev; j < curr; j++) {
+                for(size_t j = prev; j < curr; j++) {
 
                     std::getline(infile, line);
                     sscanf(line.c_str(), "%lf %lf %lf", &x, &y, &z);
@@ -195,27 +184,24 @@ namespace MS {
             }
 
             if(mdata.m_coordinate_type.compare("Direct") == 0){
-                for(unsigned int i = 0; i < atoms.size(); i++){
+                for(size_t i = 0; i < atoms.size(); i++){
                     mdata.direct_to_world(atoms[i].m_pos, atoms[i].m_pos);
                 }
                 mdata.m_coordinate_type = std::string("World");
             }
 
-            mdata.m_coordinate_unit = "Angs";
-
             // read grid dimensions
             while(true) {
-                std::getline(infile, line);
-                rtrim(line);
+               std::getline(infile, line);
+                Utils::rtrim(line);
                 if(line.length() >= 2)
                     break;
             }
 
             sscanf(line.c_str(),"%d %d %d", &mdata.m_grid_dims[0], &mdata.m_grid_dims[1], &mdata.m_grid_dims[2]);
-            
-            // VASP write 5 values in each line, and rounds off the last line 0
+
+            // VASP write 5 values in each line, and rounds off the last line with 0
             const size_t nvalues = mdata.grid_sz();
-            //size_t nlines = size_t(ceil(float(nvalues) / 5.0f));
 
             // read values
             size_t idx = 0;
@@ -224,11 +210,12 @@ namespace MS {
             while(true) {
 
                 if (idx == nvalues) break;
+
                 std::getline(infile, line);
                 if(line.empty())    break;
 
                 std::vector<std::string> tokens = Utils::tokenize(line);
-                for(unsigned int i = 0; i < tokens.size(); i++){
+                for(size_t i = 0; i < tokens.size(); i++){
                     values[idx++] = atof(tokens[i].c_str());
                     if (idx == nvalues) break;
                 }
@@ -240,7 +227,7 @@ namespace MS {
         }
 
         /**
-          *   @brief  Write a VASP-type CHGCAR (and AECCAR) file
+          *   @brief  Write a VASP CAR file: CHGCAR, AECCAR, LOCPOT
           *
           *   @param  filename is the input filename
           *   @param  mdata is the metadata about the system
@@ -249,7 +236,7 @@ namespace MS {
           *   @return success flag
           */
         template <typename T>
-        bool write_CHGCAR(const std::string &filename, const MS::SystemInfo &mdata, const std::vector<Material> &atoms, const T *vals = 0) {
+        bool write_CAR(const std::string &filename, const MS::SystemInfo &mdata, const std::vector<Material> &atoms, const T *vals = nullptr) {
 
             FILE *outfile = fopen(filename.c_str(), "w");
             if(outfile == NULL){
@@ -263,35 +250,33 @@ namespace MS {
             fprintf(outfile, "%s\n", mdata.m_sysname.c_str());
             fprintf(outfile, "%16f\n", 1.0);
 
-            for(unsigned int i = 0; i < 3; i++){
+            for(uint8_t i = 0; i < 3; i++){
                 fprintf(outfile, "%14.6f %14.6f %14.6f\n", mdata.m_lattice.v[i][0], mdata.m_lattice.v[i][1], mdata.m_lattice.v[i][2]);
             }
 
             // write materials
-            for(unsigned int i = 0; i < mdata.m_materials.size(); i++){
+            for(size_t i = 0; i < mdata.m_materials.size(); i++){
                 fprintf(outfile, "%6s", mdata.m_materials[i].first.c_str());
             }
             fprintf(outfile, "\n");
-            for(unsigned int i = 0; i < mdata.m_materials.size(); i++){
+            for(size_t i = 0; i < mdata.m_materials.size(); i++){
                 fprintf(outfile, "%7d", mdata.m_materials[i].second);
             }
             fprintf(outfile, "\n");
 
             // write positions
             fprintf(outfile, "%s\n", mdata.m_coordinate_type.c_str());
-            for(unsigned int i = 0; i < atoms.size(); i++){
+            for(size_t i = 0; i < atoms.size(); i++){
                 fprintf(outfile, "%13.7f %13.7f %13.7f\n", atoms[i].m_pos[0], atoms[i].m_pos[1], atoms[i].m_pos[2]);
             }
 
             // write grid
             fprintf(outfile, "\n%d %d %d\n", mdata.m_grid_dims[0], mdata.m_grid_dims[1], mdata.m_grid_dims[2]);
 
-            if(vals != 0){
-
+            if(vals != nullptr){
                 for(size_t i = 0; i < mdata.grid_sz(); i+=5){
                     fprintf(outfile, "%E %E %E %E %E\n", vals[i], vals[i+1], vals[i+2], vals[i+3], vals[i+4]);
                 }
-
             }
 
             printf(" Done!\n");
@@ -317,7 +302,6 @@ namespace MS {
             if(!infile.is_open()){
                 std::cerr << " MD::Cube::read -- Could not open file " << filename << std::endl;
                 exit(1);
-                return 0;
             }
 
             // -----------------------------------------------------
@@ -338,25 +322,25 @@ namespace MS {
             double dx, dy, dz;
 
             // read gridsize and lattice vectors
-            for(unsigned int i = 0; i < 3; i++){
+            for(uint8_t i = 0; i < 3; i++){
+
                 std::getline(infile, line);
                 sscanf(line.c_str(),"%d %lf %lf %lf", &n, &dx, &dy, &dz);
 
                 // these numbers are N, dx, dy, dz in each dimension
                 mdata.m_grid_dims[i] = abs(n);
 
-                // first N determines the unit
+                // for i = 0, N determines the unit of charge and spatial coordinates
                 if (i == 0) {
                     // if N is positive, then the lattice vector is on Bohr
                     // if N is negative, then the lattice vector is in Angs
-                    // I want to store as Angs
                     if (n > 0) {
-                        mdata.m_l_unit = 1.889725992;   mdata.m_coordinate_unit = "Bohr";
-                        mdata.m_e_unit = 0.036749309;   mdata.m_charge_unit = "hartree";
+                        mdata.m_length_unit = "Bohr";       mdata.m_length_file2Angs = 1.889725992;
+                        mdata.m_charge_unit = "hartree";    mdata.m_charge_file2electrons = 0.036749309;
                     }
                     else {
-                        mdata.m_l_unit = 1.0;   mdata.m_coordinate_unit = "Angstrom";
-                        mdata.m_e_unit = 1.0;   mdata.m_charge_unit = "eV";
+                        mdata.m_length_unit = "Ang";   mdata.m_length_file2Angs = 1.0;
+                        mdata.m_charge_unit = "eV";         mdata.m_charge_file2electrons = 1.0;
                     }
                 }
 
@@ -387,7 +371,7 @@ namespace MS {
                 if(z > (mdata.m_lattice_origin[2] + mdata.m_lattice.v[2][2])){
                     z -= mdata.m_lattice.v[2][2];
                 }
-                atoms.push_back( Material(n, chg, x, y, z));
+                atoms.push_back(Material(n, chg, x, y, z));
             }
 
             // read values
@@ -407,7 +391,7 @@ namespace MS {
                 }
 
                 std::vector<std::string> tokens = Utils::tokenize(line);
-                for(unsigned int i = 0; i < tokens.size(); i++, cnt++){
+                for(size_t i = 0; i < tokens.size(); i++, cnt++){
 
                     // convert from column major to row major
                     size_t z = cnt / XY;

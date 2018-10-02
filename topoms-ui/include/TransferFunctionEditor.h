@@ -284,6 +284,8 @@ public:
     size_t fsize;
 
 private:
+    std::string name;
+
     // for interface
     QCPGraph *channels[4];              // 4 color channels
     QCPGraph *histo;                    // histogram of the function may be drawn
@@ -335,8 +337,8 @@ private:
 
 public:
 
-    TFEditor() :
-        tfsize(0), tfunc(0),
+    TFEditor(std::string _name = std::string("Transfer Function Editor")) :
+         name(_name), tfsize(0), tfunc(0),
             colorScale(0), histo(0),
             tfIdxAxis(0), colorAxis(0), valueAxis(0), freqAxis(0),
             live_mousemode(TFEditor::MMNone), prev_c (QPointF(-1,-1)),
@@ -356,7 +358,7 @@ public:
 
     void init_tfunc(const std::string &filename) {
 
-        printf("init_tfunc(%s)\n", filename.c_str());
+        //printf("init_tfunc(%s)\n", filename.c_str());
         tfunc = TFEditor::read_transfer_function(filename, tfsize);
 
         // create a colorgradient and convert to tfunc
@@ -372,7 +374,7 @@ public:
     }
     void init_tfunc(size_t sz = 512, QCPColorGradient::GradientPreset preset = QCPColorGradient::gpJet) {
 
-        printf("init_tfunc(%d)\n", sz);
+        //printf("init_tfunc(%d)\n", sz);
         tfsize = sz;
         tfunc = new float[4*tfsize];
 
@@ -386,7 +388,7 @@ public:
         // create channels and update
         tfunc2channels();
         this->rescaleAxes();
-        this->colorAxis->setRange( 0.0, 1.0 );
+        this->colorAxis->setRange(0.0, 1.0);
         //this->valueAxis->rescale();
         //this->freqAxis->rescale();
     }
@@ -394,6 +396,10 @@ public:
     void set_function(const float *f, const size_t &sz) {
         func = f;
         fsize = sz;
+    }
+    void set_function(const std::vector<float> &f) {
+        func = f.data();
+        fsize = f.size();
     }
 
     void set_histogram(uint num_bins, bool use_log = false);

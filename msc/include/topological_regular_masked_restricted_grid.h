@@ -31,29 +31,21 @@
 #define TOPOLOGICAL_REGULAR_MASKED_RESTRICTED_GRID_H
 
 
-#include <map>
-#include <set>
-#include "basic_types.h"
-#include "vectors.h"
 #include "regular_grid.h"
 #include "topological_regular_grid.h"
-#include "topological_regular_grid_restricted.h"
 #include "topological_regular_masked_grid.h"
-#include "labeling.h"
+#include "topological_regular_grid_restricted.h"
 
 namespace MSC {
 
-
-    class TopologicalRegularMaskedRestrictedGrid : public TopologicalRegularMaskedGrid, public TopologicalRegularGridRestricted {
-    public:
-        TopologicalRegularMaskedRestrictedGrid(RegularGrid* base_grid) :
-            TopologicalRegularMaskedGrid(base_grid),
-            TopologicalRegularGridRestricted(base_grid),
-            TopologicalRegularGrid(base_grid) {}
-    };
-
-
-}
-
-
+class TopologicalRegularMaskedRestrictedGrid :
+        public TopologicalRegularMaskedGrid,
+        public TopologicalRegularGridRestricted {
+public:
+TopologicalRegularMaskedRestrictedGrid(RegularGrid* base_grid) :
+    TopologicalRegularMaskedGrid(base_grid),
+    TopologicalRegularGridRestricted(base_grid),
+    TopologicalRegularGrid(base_grid) {}
+};
+}   // end of namespace
 #endif

@@ -74,8 +74,8 @@ purposes.
 #define _UTILS_H_
 
 #include <cmath>
-#include <algorithm>
 #include <numeric>
+#include <algorithm>
 
 #include <map>
 #include <vector>
@@ -207,6 +207,7 @@ namespace Utils {
     // -------------------------------------------------------------------------
     // handling periodic boundary
 
+
     // wrap around in [0,1]
     inline float wrap_around(float val, float min, float max){
         return (val < min) ? (val + (max-min)) :
@@ -240,12 +241,41 @@ namespace Utils {
     // read the files in a given directory
     std::vector<std::string> get_directory_listing(std::string searchstring);
 
-    std::string trim(std::string& str);
-    std::string toupper(std::string& str);
+    // -------------------------------------------------------------------------
+    // strung utilities
+    inline std::string remove_carriagereturn(std::string& str) {
+
+        if (str.length() == 0)              return str;
+        if (str[str.length()-1] == '\r')    str = str.erase(str.length()-1, 1);
+        return str;
+    }
+
+    inline std::string trim(std::string& str) {
+        str.erase(0, str.find_first_not_of(' '));       //prefixing spaces
+        str.erase(str.find_last_not_of(' ')+1);         //surfixing spaces
+        return str;
+    }
+
+    inline std::string rtrim(std::string& str) {
+        str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) {
+            return !std::isspace(ch);
+        }).base(), str.end());
+        return str;
+    }
+
+    inline std::string toupper(std::string& str) {
+        for(uint32_t i=0; str[i]!=0; i++) {
+            if(97 <= str[i] && str[i] <= 122){
+                str[i]-=32;
+            }
+        }
+        return str;
+    }
 
     // tokenize a string
     std::vector<std::string> tokenize(std::string line);
     std::vector<std::string> tokenize(const std::string &line, char delim);
+
 
     // for formatting output
     void print_separator(unsigned int n = 120);

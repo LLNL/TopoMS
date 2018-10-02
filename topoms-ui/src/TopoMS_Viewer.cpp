@@ -280,6 +280,20 @@ END OF TERMS AND CONDITIONS
 
 #include <QGLViewer/manipulatedCameraFrame.h>
 
+#ifdef USE_VTK
+#include "vtkMatrix4x4.h"
+#include "vtkImageData.h"
+#include <vtkCell.h>
+#include <vtkDataArray.h>
+#include <vtkDoubleArray.h>
+#include <vtkPointData.h>
+#include <vtkSmartPointer.h>
+#include <vtkDiscretizableColorTransferFunction.h>
+#include <vtkPolyData.h>
+#endif
+
+qglviewer::Vec v2v(const MSC::Vec3f &v) {   return qglviewer::Vec(v[0], v[1], v[2]);    }
+
 // ---------------------------------------------------------------------------
 // constructor and init function
 
@@ -427,6 +441,10 @@ void TopoMSViewer::render_volume () {
     static bool b_forceRender = true;
 
     glPushMatrix();
+
+    std::vector<double> matrx = parentApp->m_mdlayer->m_metadata.m_lattice.linearize(true);
+    glMultMatrixd(matrx.data());
+
     if (b_forceRender) {
         vsvr->gl_render( g_numslices);          // Redraws from scratch
         //b_forceRender = false;
@@ -443,29 +461,16 @@ void TopoMSViewer::draw_atoms(bool with_names){
 
     if(atoms.empty())
         return;
-/*
-    // linear scaling of opengl matrices to draw in world coordinates
-    glPushMatrix();
 
-    glScalef( (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[0] / parentApp->m_mdlayer->m_metadata.m_lattice.v[0][0],
-              (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[1] / parentApp->m_mdlayer->m_metadata.m_lattice.v[1][1],
-              (float)parentApp->m_mdlayer->m_metadata.m_grid_dims[2] / parentApp->m_mdlayer->m_metadata.m_lattice.v[2][2]
-            );
-    glTranslatef( -1*parentApp->m_mdlayer->m_metadata.m_lattice_origin[0],
-                  -1*parentApp->m_mdlayer->m_metadata.m_lattice_origin[1],
-                  -1*parentApp->m_mdlayer->m_metadata.m_lattice_origin[2]
-                );
-*/
-    float factor = 0.5*parentApp->ui.dsb_atom->value();
-
+    const float factor = parentApp->scale_atom();
     size_t num_atoms = atoms.size();
-    for(int i = 0; i < num_atoms; i++) {
+    for(size_t i = 0; i < num_atoms; i++) {
 
         if(with_names) {
-            glPushName(i);
+            glPushName(1+i);    // atom numbers start with 1
         }
 
-        draw_sphere( atoms[i].m_pos, Colorator::by_atomSymbol(atoms[i].m_symbol), factor*atoms[i].radius() );
+        draw_sphere(atoms[i].m_pos, Colorator::by_atomSymbol(atoms[i].m_symbol), factor*atoms[i].radius());
 
         if(with_names) {
             glPopName();
@@ -477,87 +482,49 @@ void TopoMSViewer::draw_atoms(bool with_names){
 
 void TopoMSViewer::draw_extrema() {
 
-    // interpret the scale as radius
-    const float factor = parentApp->ui.dsb_cp->value();
-
-    const std::vector<INDEX_TYPE> &extrema = parentApp->m_mdlayer->get_extrema();
+    const float factor = parentApp->scale_cp();
+    const std::vector<INDEX_TYPE> &extrema = parentApp->m_mdlayer->bader_get_extrema();
     for(size_t i = 0; i < extrema.size(); i++) {
 
         INDEX_TYPE cellIdx = extrema[i];
 
-        float fcoords[3];
+        float fcoords[3], wcoords[3];
         parentApp->m_mdlayer->m_metadata.idx_to_grid(cellIdx, fcoords);
-
-        float wcoords[3];
         parentApp->m_mdlayer->m_metadata.grid_to_world(fcoords, wcoords);
 
-        draw_sphere(wcoords[0], wcoords[1], wcoords[2], Colorator::by_topoIndex(0), factor);
+        draw_sphere(wcoords[0], wcoords[1], wcoords[2], Colorator::by_topoIndex(3), factor);
     }
-}
-
-void TopoMSViewer::draw_paths() {
-
-    static float periodic_cutoff = 0.3*parentApp->m_mdlayer->get_gridDims()[0];
-    const std::vector<std::vector<MSC::Vec3d> > &plines = parentApp->m_mdlayer->m_paths;
-
-    glColor3f(1, .5, .1);
-    glLineWidth(1.0);
-
-    for(int j = 0; j < plines.size(); j++) {
-
-        const std::vector<MSC::Vec3d> &pline = plines.at(j);
-
-        glBegin(GL_LINE_STRIP);
-        for(int i = 0; i < pline.size(); i++) {
-
-            if (i > 0 && (pline[i] - pline[i-1]).Mag() > periodic_cutoff) {
-                glEnd();
-                glBegin(GL_LINE_STRIP);
-            }
-
-            float gcoords[3] = {pline.at(i)[0], pline.at(i)[1], pline.at(i)[2]};
-            float wcoords[3];
-            parentApp->m_mdlayer->m_metadata.grid_to_world(gcoords, wcoords);
-            glVertex3f(wcoords[0], wcoords[1], wcoords[2]);
-        }
-        glEnd();
-    }
-    glLineWidth(1);
 }
 
 void TopoMSViewer::draw_nodes(bool with_names) {
 
-    size_t natoms = this->parentApp->m_mdlayer->m_atoms.size();
+    if(!parentApp->show_tnodes())
+        return;
 
-    const float factor = 0.2*parentApp->ui.dsb_cp->value();
-    const std::vector<INT_TYPE> &nodes = this->parentApp->m_mdlayer->m_nodes;
+    const float factor = parentApp->scale_cp();
+    const size_t natoms = this->parentApp->m_mdlayer->m_atoms.size();
+    const size_t nnodes = this->parentApp->m_mdlayer->msc_get_nnodes();
 
-    size_t nnodes = nodes.size();
+    for(size_t nidx = 0; nidx < nnodes; nidx++) {
 
-    for(int i = 0; i < nnodes; i++) {
+        if(!this->parentApp->m_mdlayer->msc_is_nodeAlive(nidx))
+            continue;
 
         int ndim;
         INDEX_TYPE ncidx;
-        MSC::Vec3l coord;
-
-        this->parentApp->m_mdlayer->get_msc_node(nodes[i], ndim, ncidx, coord);
+        MSC::Vec3d coord;
+        this->parentApp->m_mdlayer->msc_get_node(nidx, ndim, ncidx, coord);
 
         if(!parentApp->show_topology(ndim))
             continue;
 
         if(with_names) {
-            glPushName(natoms + nodes[i]);
+            glPushName(natoms + nidx);
         }
 
-        //MSC::Vec3d fcoord = coord;
-        //fcoord *= 0.5;
-
-        float gcoords[3] = {0.5*float(coord[0]), 0.5*float(coord[1]), 0.5*float(coord[2])};
         float wcoords[3];
-        parentApp->m_mdlayer->m_metadata.grid_to_world(gcoords, wcoords);
-
-        draw_sphere( wcoords[0], wcoords[1], wcoords[2], Colorator::by_topoIndex(ndim), factor);
-        //draw_sphere( fcoord[0], fcoord[1], fcoord[2], Colorator::by_topoIndex(ndim), factor);
+        parentApp->m_mdlayer->msc_gcoords_to_wcoords(coord, wcoords);
+        draw_sphere(wcoords[0], wcoords[1], wcoords[2], Colorator::by_topoIndex(ndim), factor);
 
         if(with_names) {
             glPopName();
@@ -565,11 +532,135 @@ void TopoMSViewer::draw_nodes(bool with_names) {
     }
 }
 
+void TopoMSViewer::draw_mnodes(bool with_names) {
+
+    if(!parentApp->show_mnodes())
+        return;
+
+    const float factor = parentApp->scale_cp();
+    const size_t natoms = this->parentApp->m_mdlayer->m_atoms.size();
+
+    // find all unique nodes
+    std::set<INT_TYPE> nodes;
+    const std::map<INT_TYPE, MSCBond> &mscbonds = this->parentApp->m_mdlayer->m_mscbonds;
+
+    for(auto iter = mscbonds.begin(); iter != mscbonds.end(); iter++) {
+
+        const MSCBond &bond = iter->second;
+        nodes.insert(bond.saddle);
+        for(auto e = bond.extrema.begin(); e != bond.extrema.end(); e++)
+            nodes.insert(*e);
+    }
+
+    // now draw all nodes
+    for(auto n = nodes.begin(); n != nodes.end(); n++) {
+
+        int ndim;
+        INDEX_TYPE ncidx;
+        MSC::Vec3d coord;
+        this->parentApp->m_mdlayer->msc_get_node(*n, ndim, ncidx, coord);
+
+        if(with_names) {
+            glPushName(1 + natoms + *n);
+        }
+
+        float wcoords[3];
+        parentApp->m_mdlayer->msc_gcoords_to_wcoords(coord, wcoords);
+        draw_sphere(wcoords[0], wcoords[1], wcoords[2], Colorator::by_topoIndex(ndim), factor);
+
+        if(with_names) {
+            glPopName();
+        }
+    }
+}
+
+void TopoMSViewer::draw_mpaths() {
+
+    if(!parentApp->show_mpaths())
+        return;
+
+    static float periodic_cutoff = parentApp->m_mdlayer->get_periodic_cutoff(true);
+    glColor3f(1, .5, .1);
+    glLineWidth(1.5);
+
+    const std::map<INT_TYPE, MSCBond> &mscbonds = this->parentApp->m_mdlayer->m_mscbonds;
+    for(auto iter = mscbonds.begin(); iter != mscbonds.end(); iter++) {
+
+        const std::vector<std::vector<MSC::Vec3d> > &plines = iter->second.paths;
+
+        for(size_t j = 0; j < plines.size(); j++) {
+
+            const std::vector<MSC::Vec3d> &pline = plines.at(j);
+
+            glBegin(GL_LINE_STRIP);
+            for(int i = 0; i < pline.size(); i++) {
+
+                if (i > 0 && (pline[i] - pline[i-1]).Mag() > periodic_cutoff) {
+                    glEnd();
+                    glBegin(GL_LINE_STRIP);
+                }
+
+                float gcoords[3] = {pline.at(i)[0], pline.at(i)[1], pline.at(i)[2]};
+                float wcoords[3];
+                parentApp->m_mdlayer->m_metadata.grid_to_world(gcoords, wcoords);
+                glVertex3f(wcoords[0], wcoords[1], wcoords[2]);
+            }
+            glEnd();
+        }
+    }
+    glLineWidth(1.0);
+}
+
+void TopoMSViewer::draw_arcs() {
+
+    if(!parentApp->show_tarcs())
+        return;
+
+    static float periodic_cutoff = parentApp->m_mdlayer->get_periodic_cutoff(true);
+    const size_t narcs = this->parentApp->m_mdlayer->msc_get_narcs();
+
+    for (size_t aidx = 0; aidx < narcs; aidx++) {
+
+        if(!this->parentApp->m_mdlayer->msc_is_arcAlive(aidx))
+            continue;
+
+        int adim = 4+this->parentApp->m_mdlayer->msc_get_arcDim(aidx);
+        if(!parentApp->show_topology(adim))
+            continue;
+
+        std::vector<INDEX_TYPE> arc_geom;
+        this->parentApp->m_mdlayer->msc_get_arcGeometry(aidx, arc_geom);
+
+        QColor col = Colorator::by_topoIndex(adim);
+        glColor3f(col.redF(), col.greenF(), col.blueF());
+
+        qglviewer::Vec prev_coords (0,0,0);
+
+        glBegin(GL_LINE_STRIP);
+        for (size_t j = 0; j < arc_geom.size(); j++) {
+
+            float wcoords[3];
+            parentApp->m_mdlayer->msc_cellid_to_wcoords(arc_geom[j], wcoords);
+
+            if(j > 0 && (fabs(wcoords[0]-prev_coords[0]) > periodic_cutoff ||
+                         fabs(wcoords[1]-prev_coords[1]) > periodic_cutoff ||
+                         fabs(wcoords[2]-prev_coords[2]) > periodic_cutoff )
+                    ) {
+                glEnd();
+                glBegin(GL_LINE_STRIP);
+            }
+
+            glVertex3f(wcoords[0], wcoords[1], wcoords[2]);
+            prev_coords = qglviewer::Vec(wcoords[0],wcoords[1],wcoords[2]);
+        }
+        glEnd();
+    }
+}
+
 void TopoMSViewer::draw() {
 
     if (!parentApp)                 return;
     if (!parentApp->m_mdlayer)      return;
-
 
     draw_unitCell(bbox_min, lattice[0], lattice[1], lattice[2], Qt::black, Qt::black, Qt::black);
 
@@ -582,20 +673,26 @@ void TopoMSViewer::draw() {
         draw_extrema();
     }
 
-    // topology -- directly fetch from msc @ chosen persistence
-    if (parentApp->m_mdlayer->msc_available()) {
+    // topology -- directly fetch from msc @ the chosen persistence
+    if (parentApp->m_mdlayer->msc_is_available()) {
 
-        if(parentApp->show_topology()){
-            draw_nodes(false);
-            draw_arcs();
-        }
-        if(parentApp->show_paths()){
-            draw_paths();
-        }
+        // topological graph
+        draw_arcs();
+        draw_nodes(false);
+
+        // molecular graph
+        draw_mpaths();
+        draw_mnodes(false);
     }
-    /*if(parentApp->show_volRendering()){
+
+    // orthogonal slicing along saddle
+    if (parentApp->show_saddleSlice()) {
+        draw_saddleSlice();
+    }
+
+    if(parentApp->show_volRendering()){
         render_volume();
-    }*/
+    }
 }
 
 void TopoMSViewer::drawWithNames(){
@@ -603,77 +700,182 @@ void TopoMSViewer::drawWithNames(){
     if (!parentApp)                 return;
     if (!parentApp->m_mdlayer)      return;
 
-    drawn_name = 0;
     if(parentApp->show_atoms()){
         draw_atoms(true);
     }
-    if(parentApp->show_topology()){
-        draw_nodes(true);
+    if (parentApp->m_mdlayer->msc_is_available()) {
+
+        if(parentApp->show_mnodes()){   draw_mnodes(true); }
+        if(parentApp->show_tnodes()){   draw_nodes(true);  }
     }
 }
 
-void TopoMSViewer::draw_arcs() {
+// ---------------------------------------------------------------------------
+// supporting functions
 
-#if 0
-    int narcs = this->parentApp->m_mdlayer->m_msc->numArcs();
+#include "TransferFunctionEditor.h"
+#include "vtkVolumeSlicer.h"
 
-    for (int i = 0; i < narcs; i++) {
-
-        if(!this->parentApp->m_mdlayer->m_msc->isArcAlive(i))
-            continue;
-
-        vector<INDEX_TYPE> arc_geom;
-        this->parentApp->m_mdlayer->m_msc->fillArcGeometry(i, arc_geom);
-
-        GInt::node<FLOATTYPE> &lowernode = this->parentApp->m_mdlayer->m_msc->getNode(this->parentApp->m_mdlayer->m_msc->getArc(i).lower);
-
-        if(!parentApp->show_topology(4+lowernode.dim))
-            continue;
-
-/*
-   glBegin(GL_LINES);
-   Vec3l a, b;
-   this->parentApp->m_mdlayer->m_tgrid->cellid2Coords(this->parentApp->m_mdlayer->m_msc->getNode(this->parentApp->m_mdlayer->msc->getArc(i).lower).cellindex, a);
-   this->parentApp->m_mdlayer->m_tgrid->cellid2Coords(this->parentApp->m_mdlayer->m_msc->getNode(this->parentApp->m_mdlayer->msc->getArc(i).upper).cellindex, b);
-   Vec3d fa = a;
-   Vec3d fb = b;
-   fa *= 0.5;
-   fb *= 0.5;
-   glColor3f(1, 0, 1);
-   glVertex3f(fa[0], fa[1], fa[2]);
-   glColor3f(0.5, 0, 0.5);
-   glVertex3f(fb[0], fb[1], fb[2]);
-   glEnd();
-*/
-        QColor col = Colorator::by_topoIndex(3+lowernode.dim);
-
-        glColor3f( col.redF(), col.greenF(), col.blueF() );
-
-        GInt::Vec3d prev_fcoord (0,0,0);
-        glBegin(GL_LINE_STRIP);
-        for (int j = 0; j < arc_geom.size(); j++) {
-
-            GInt::Vec3l coord;
-            this->parentApp->m_mdlayer->m_tgrid->cellid2Coords(arc_geom[j], coord);
-
-            GInt::Vec3d fcoord = coord;
-            fcoord *= 0.5;
-
-            if(i > 0 && ( abs(fcoord[0]-prev_fcoord[0]) > 5 ||
-                          abs(fcoord[1]-prev_fcoord[1]) > 5 ||
-                          abs(fcoord[2]-prev_fcoord[2]) > 5 )
-                    ) {
-                glEnd();
-                glBegin(GL_LINE_STRIP);
-            }
-            glVertex3f(fcoord[0], fcoord[1], fcoord[2]);
-
-
-            prev_fcoord = fcoord;
-
-        }
-        glEnd();
+void TopoMSViewer::set_sliceTransferFunction(float *tfunc, size_t tfsize) {
+#ifdef USE_VTK
+    m_vtkSliceTf = vtkDiscretizableColorTransferFunction::New();
+#if 1
+    float factor = 1.0 / float(tfsize-1);
+    for(uint i = 0; i < tfsize; i++) {
+        m_vtkSliceTf->AddRGBPoint( float(i)*factor, tfunc[4*i], tfunc[4*i+1], tfunc[4*i+2]);
     }
+#else
+    m_vtkSliceTf->AddRGBPoint(0.0, 0.231373, 0.298039, 0.752941);
+    m_vtkSliceTf->AddRGBPoint(1.0, 0.705882, 0.0156863, 0.14902);
+    m_vtkSliceTf->SetColorSpaceToDiverging();
+    m_vtkSliceTf->SetDiscretize(512);
+#endif
+    m_vtkSliceTf->Build();
+#endif
+}
+
+void TopoMSViewer::draw_vtiSlice(vtkImageData *vtiSlice) {
+
+#ifdef USE_VTK
+#if 0
+    // draw bounds
+    double *b = vtiSlice->GetBounds();
+    qglviewer::Vec b0( b[0], b[2], b[4] );
+    qglviewer::Vec b1( b[1], b[3], b[5] );
+    glColor3f(1,0,0);
+    this->draw_bBox(b0, b1);
+#endif
+
+    bool do_log = parentApp->ui.cb_log2->isChecked();
+
+    // data
+    vtkDoubleArray *scalarData = (vtkDoubleArray*) vtiSlice->GetPointData()->GetScalars();
+    double *scalarRange = scalarData->GetRange();
+
+    if (do_log) {
+        scalarRange[0] = std::log10(1.0 + scalarRange[0]);
+        scalarRange[1] = std::log10(1.0 + scalarRange[1]);
+    }
+    double scalarFactor = 1.0 / (scalarRange[1] - scalarRange[0]);
+
+    glColor3f(1,0,0);
+    glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+    glDisable(GL_CULL_FACE);
+
+    std::set<vtkIdType> fpoints;
+    // --------------------------------------------------------------------------
+    // draw all quads
+    uint8_t qorder[4] = {0,1,3,2};
+
+    vtkIdType ptIdxs[4];
+    double    ptVals[4];
+    bool      zVals[4];
+    double pnt[3], col[3];
+
+    int dtype = vtiSlice->GetPointData()->GetScalars()->GetDataType() ;
+
+    glBegin(GL_QUADS);
+    for(vtkIdType cellIdx = 0; cellIdx < vtiSlice->GetNumberOfCells(); cellIdx++) {
+
+        vtkCell *cell = vtiSlice->GetCell(cellIdx);
+        if( 4 != cell->GetNumberOfPoints() ){
+            continue;
+        }
+
+        // all 4 points indices
+        for(uint8_t i = 0; i < 4; i++) {
+            ptIdxs[i] = cell->GetPointId(i);
+            ptVals[i] = scalarData->GetComponent(ptIdxs[i], 0);
+
+            // for labels, invalid values are -1
+            zVals[i] = (dtype == VTK_INT) ? (ptVals[i] + 1) < 0.00001 : std::isnan(ptVals[i]);
+        }
+
+        // if all values are outside the domain
+        //if(zVals[0] && zVals[1] && zVals[2] && zVals[3]){
+        //   continue;
+        //}
+
+        // if any two consecutive values are outside the domain
+        if( (zVals[qorder[0]] && zVals[qorder[1]]) ||
+            (zVals[qorder[1]] && zVals[qorder[2]]) ||
+            (zVals[qorder[2]] && zVals[qorder[3]]) ||
+            (zVals[qorder[3]] && zVals[qorder[0]]) ){
+            continue;
+        }
+
+        // else, draw
+        for(uint8_t i = 0; i < 4; i++) {
+
+            uint8_t q = qorder[i];
+
+            if (do_log) {
+                ptVals[q] = std::log10(1.0 + ptVals[q]);
+            }
+
+            fpoints.insert(ptIdxs[i]);
+            ptVals[q] = (ptVals[q] - scalarRange[0]) * scalarFactor;
+
+            vtiSlice->GetPoint(ptIdxs[q], pnt);
+            m_vtkSliceTf->GetColor(ptVals[q], col);
+
+            GLCOLOR3f(col);
+            GLVERTEX3f(pnt);
+        }
+    }
+    glEnd();
+
+
+    // ---------------------------------------------------------
+    std::vector<float> fvals;
+    fvals.reserve(fpoints.size());
+    for(auto iter = fpoints.begin(); iter != fpoints.end(); iter++){
+        float val = scalarData->GetComponent(*iter, 0);
+        if (do_log) {
+            val = std::log10(1.0 + val);
+        }
+        fvals.push_back(val);
+    }
+
+    this->parentApp->m_surtf_plot->set_function(fvals);
+    this->parentApp->m_surtf_plot->set_histogram(128);
+#endif
+}
+
+void TopoMSViewer::draw_saddleSlice() {
+
+#ifdef USE_VTK
+    if (this->selectedNodes.empty()){
+        return;
+    }
+
+    if (this->selectedNodes.size() > 1){
+        std::cout << " WARNING: TopoMSViewer::draw_saddleSlice expects a single saddle selection!\n";
+    }
+
+    int idx = *this->selectedNodes.rbegin();
+
+    int ndim;
+    INDEX_TYPE ncidx;
+    MSC::Vec3d ncoord;
+
+    this->parentApp->m_mdlayer->msc_get_node(idx, ndim, ncidx, ncoord);
+    if(2 != ndim){
+        return;
+    }
+
+    parentApp->m_mdlayer->refresh_orthogonalSlice(idx, this->parentApp->ui.sslider->value());
+
+    double mat[16];
+    vtkVolumeSlicer *slicer = (parentApp->m_mdlayer->slice_labels) ? parentApp->m_mdlayer->m_slicer_label : parentApp->m_mdlayer->m_slicer_function;
+    slicer->matrix(mat);
+
+    glPushMatrix();
+    glMultMatrixd(mat);
+
+    //this->drawAxis((this->bbox_max-this->bbox_min)[0] * 0.3);
+    draw_vtiSlice(slicer->slice());
+    glPopMatrix();
 #endif
 }
 
@@ -865,27 +1067,30 @@ void TopoMSViewer::draw_sphere(const float* pos, QColor col, float radius){
 // draw a bounding box
 // -----------------------------------------------------------
 void TopoMSViewer::draw_unitCell(const qglviewer::Vec &o,
-                           const qglviewer::Vec &vx, const qglviewer::Vec &vy, const qglviewer::Vec &vz, QColor cx, QColor cy, QColor cz){
+                                 const qglviewer::Vec &vx, const qglviewer::Vec &vy, const qglviewer::Vec &vz,
+                                 QColor cx, QColor cy, QColor cz){
 
     glPushAttrib(GL_LIGHTING_BIT);
     glDisable(GL_LIGHTING);
     glDisable(GL_COLOR_MATERIAL);
 
+    glColor3f(0,0,0);
+
     glBegin(GL_LINES);
 
-    GLCOLORqc(cx);
+    //GLCOLORqc(cx);
     GLVERTEX3f(o);          GLVERTEX3f((o+vx));
     GLVERTEX3f((o+vy));     GLVERTEX3f((o+vy+vx));
     GLVERTEX3f((o+vz));     GLVERTEX3f((o+vz+vx));
     GLVERTEX3f((o+vy+vz));  GLVERTEX3f((o+vy+vz+vx));
 
-    GLCOLORqc(cy);
+    //GLCOLORqc(cy);
     GLVERTEX3f(o);          GLVERTEX3f((o+vy));
     GLVERTEX3f((o+vx));     GLVERTEX3f((o+vx+vy));
     GLVERTEX3f((o+vz));     GLVERTEX3f((o+vz+vy));
     GLVERTEX3f((o+vx+vz));  GLVERTEX3f((o+vx+vz+vy));
 
-    GLCOLORqc(cz);
+    //GLCOLORqc(cz);
     GLVERTEX3f(o);          GLVERTEX3f((o+vz));
     GLVERTEX3f((o+vx));     GLVERTEX3f((o+vx+vz));
     GLVERTEX3f((o+vy));     GLVERTEX3f((o+vy+vz));
@@ -992,23 +1197,31 @@ void TopoMSViewer::draw_bConvexHull(const std::vector<const float*> &corners){
 void TopoMSViewer::postSelection(const QPoint &point) {
 
     int sname = this->selectedName();
-    //printf(" postSelection (%d) ", sname);
+    printf(" postSelection (%d) ", sname);
 
-    if(sname == -1)
-        return;
-
-    size_t natoms = parentApp->m_mdlayer->m_atoms.size();
-
-    if (sname < natoms) {
-        printf(" Clicked: ");       fflush(stdout);
-        parentApp->m_mdlayer->m_atoms[sname].print();
+    if(sname == -1){
+        printf("\n");
         return;
     }
 
-    sname = sname - natoms;
+    size_t natoms = parentApp->m_mdlayer->m_atoms.size();
+
+    if (sname <= natoms) {
+        printf(" Clicked: ");       fflush(stdout);
+        parentApp->m_mdlayer->m_atoms[sname-1].print();
+
+        selectedAtoms.clear();
+        selectedAtoms.insert(sname);
+        return;
+    }
+
+    sname = sname - natoms - 1;
 
     printf(" Clicked: ");       fflush(stdout);
-    parentApp->m_mdlayer->print_node(sname);
+    parentApp->m_mdlayer->msc_print_node(sname);
+
+    selectedNodes.clear();
+    selectedNodes.insert(sname);
 }
 
 #if 0

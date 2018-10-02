@@ -254,183 +254,45 @@ END OF TERMS AND CONDITIONS
 
 
 /**
- *  @file    TopoMS_Viewer.h
+ *  @file    vtkVolumeSlicer.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
- *  @date    10/01/2017
+ *  @date    05/12/2018
  *  @version 1.0
  *
- *  @brief This file provides the functionality for the 3D TopoMS viewer
+ *  @brief This file provides the functionality for slicing a 3D volume using vtk
  *
  *  @section DESCRIPTION
  *
- *  This file provides the functionality for the 3D TopoMS viewer
+ *  This file provides the functionality for slicing a 3D volume using vtk
  *
  */
 
-#ifndef _TOPOMS_VIEWER_
-#define _TOPOMS_VIEWER_
+#ifndef _VTKVOLUMESLICER_H_
+#define _VTKVOLUMESLICER_H_
+#include <cstddef>
 
-#include <QKeyEvent>
-#include <QGradient>
-
-#ifdef USE_GLEW
-#include <GL/glew.h>
-#endif
-
-#include <set>
-
-#include <QGLViewer/qglviewer.h>
-#include "vsvr.h"
-#include "Vec3.h"
-#include "Mat3.h"
-
-
-
-class TopoMSApp;
 class vtkImageData;
-class vtkDiscretizableColorTransferFunction;
+class vtkMatrix4x4;
 
-#define GLVERTEX3f(v) ( glVertex3f((GLfloat)v[0], (GLfloat)v[1], (GLfloat)v[2]) )
-#define GLCOLOR3f(v) ( glColor3f((GLfloat)v[0], (GLfloat)v[1], (GLfloat)v[2]) )
-#define GLCOLORqc(c) ( glColor3f((GLfloat)c.redF(), (GLfloat)c.greenF(), (GLfloat)c.blueF()) )
+class vtkVolumeSlicer {
 
-/**
-  *  @brief This class provides the core functionality for the 3D TopoMS viewer
-  */
-class TopoMSViewer : public QGLViewer {
-
-    TopoMSApp* parentApp;
-
-    size_t grid_dims[3];
-    qglviewer::Vec bbox_min, bbox_max;
-    qglviewer::Vec lattice[3];
-
-    VSVR *vsvr;
-    vtkDiscretizableColorTransferFunction* m_vtkSliceTf;    // transfer function for slicing
-
-    GLuint sphereList;
-    qglviewer::Vec orig, dir, selectedPoint;
-
-    std::set<int> selectedNodes, selectedAtoms;
-    //int drawn_name;
-
-#ifdef USE_GLEW
-    bool GLSL_available;
-    bool GLEW_available;
-#endif
+    bool m_periodic;
+    vtkImageData *m_volume, *m_slice;
+    vtkMatrix4x4 *m_matrix;
 
 public:
+    vtkVolumeSlicer() : m_volume(nullptr), m_matrix(nullptr), m_slice(nullptr), m_periodic(false) {}
 
-    TopoMSViewer(QWidget *parent);
+    //void set_volume(const double *volume, const size_t dims[3], bool periodic=true, bool negated=false);
+    void set_volume(vtkImageData *volume, bool periodic=true);
+    void set_orientation(double o[3], double nx[3], double ny[3], double nz[3]);
 
-    // to support QGLViewer 2.7.1
-    void updateGL(){  this->update(); }
+    vtkImageData* slice() const;
+    vtkImageData* volume() const;
+    void matrix(double mat[16]) const;
 
-    void set_volrendFunction(float *f, int X, int Y, int Z) {
-        vsvr->tex_set_resolution(X, Y, Z);
-        vsvr->tex_set_extern(f);
-    }
-    void set_volrendTransferFunction(float *tfunc, size_t tfsize) {
-        vsvr->tf_set_size(tfsize);
-        vsvr->tf_set_extern(tfunc);
-    }
-    void set_volrendFunction(float *f) {
-        vsvr->tex_set_resolution(grid_dims[0], grid_dims[1], grid_dims[2]);
-        vsvr->tex_set_extern(f);
-    }
+    void transform(const double in[3], double out[3]) const;
 
-    void set_sliceTransferFunction(float *tfunc, size_t tfsize);
-    void set_lattice(const Mat3<double> &lattice_mat, const Vec3<double> &origin, const Vec3<size_t> grid) {
-
-        for(uint8_t i = 0; i < 3; i++){
-            grid_dims[i] = grid[i];
-        }
-
-        for(uint i = 0; i < 3; i++){
-            lattice[i] = qglviewer::Vec(lattice_mat.v[i][0], lattice_mat.v[i][1], lattice_mat.v[i][2]);
-        }
-
-
-        bbox_min = qglviewer::Vec(origin[0], origin[1], origin[2]);
-        for(uint i = 0; i < 3; i++){
-            bbox_max[i] = std::max(lattice[0][i], lattice[1][i]);
-            bbox_max[i] = std::max(bbox_max[i], lattice[2][i]);
-            bbox_max[i] += bbox_min[i];
-        }
-
-        //std::cout << " bbox = " << bbox_max << std::endl;
-        set_bbox(bbox_min, bbox_max);
-    }
-
-    /*void set_dims(const size_t dims[]) {
-
-        for(int i = 0; i < 3; i++){
-            grid_dims[i] = dims[i];
-        }
-        bbox_min = qglviewer::Vec(0,0,0);
-        bbox_max = qglviewer::Vec(grid_dims[0], grid_dims[1], grid_dims[2]);
-        set_bbox(bbox_min, bbox_max);
-    }*/
-
-private:
-
-    void set_bbox(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max);
-
-public:
-    void printGLStatus();
-    void create_tubes();
-
-private:
-
-    void render_volume();
-    void draw_atoms(bool with_names);
-
-    void draw_extrema();
-
-    void draw_mnodes(bool with_names);
-    void draw_mpaths();
-
-    void draw_nodes(bool with_names);
-    void draw_arcs();
-
-    void draw_saddleSlice();
-    // -------------------------------------------------------
-    // drawing functions
-
-    void draw_sphere(float px, float py, float pz, QColor col, float radius = 1);
-    void draw_sphere(const qglviewer::Vec &pos, QColor col = Qt::black, float radius = 1);
-    void draw_sphere(const float* pos, QColor col = Qt::black, float radius = 1);
-
-    void draw_manipulatedFrame(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max);
-public:
-    void draw_vtiSlice(vtkImageData *vtiSlice) ;
-private:
-    // -------------------------------------------------------
-    // static functions to draw various primitives
-
-    static void draw_line(const float p[], const float q[]);
-    static void draw_line(const float p[], const float q[], QColor pcol, QColor qcol);
-    static void draw_linestrip(const std::vector<float*> &pos, uint idx_start, uint idx_end, uint idx_step);
-
-    static void draw_sphere(double R, double NumLatitudes, double NumLongitudes);
-    static void draw_bBox(const float a[], const float b[]);
-    static void draw_bBox(const qglviewer::Vec &a, const qglviewer::Vec &b);
-
-    static void draw_unitCell(const qglviewer::Vec &o, const qglviewer::Vec &vx, const qglviewer::Vec &vy, const qglviewer::Vec &vz,
-                              QColor cx = Qt::red, QColor cy = Qt::green, QColor cz = Qt::blue);
-
-    static void draw_bConvexHull(const std::vector<const float *> &corners);
-    static void draw_bConvexHull(const std::vector<std::vector<float> > &corners);
-
-protected slots:
-    virtual void init();
-
-    virtual void draw();
-    virtual void drawWithNames();
-
-    //virtual QString helpString() const;
-    virtual void postSelection(const QPoint& point);
-    virtual void keyPressEvent(QKeyEvent* event);
+    vtkImageData* compute();
 };
-
 #endif

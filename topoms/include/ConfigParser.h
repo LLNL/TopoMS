@@ -69,8 +69,8 @@ purposes.
  *  This class handles the parsing of the input configuration file to TopoMS.
  */
 
-#ifndef _CONFIGPARSER_H
-#define _CONFIGPARSER_H
+#ifndef _CONFIGPARSER_H_
+#define _CONFIGPARSER_H_
 
 #include <string>
 #include <fstream>
@@ -84,24 +84,25 @@ class Config {
 
 public:
 
-    std::string infiletype;
     std::string infilename;
-    bool is_periodic[3];
-    size_t grid_dims[3];
+    std::string infiletype;     // VASP or CUBE
+    std::string fieldtype;      // CHG or POT
 
-    double grad_threshold;
-    double error_threshold;
+    bool is_periodic[3];
+
+    bool do_bader;               // parameters for bader anlaysis
+    double threshold_vacuum;
+
+    bool do_msc;                 // parameters for msc
+    double threshold_simp;
+    double threshold_filt;
+
+    double threshold_grad;      // other internal parameters
+    double threshold_error;
     int numiter;
     int rkindex;
 
-    bool bader;
-    double vacuum_threshold;
-
-    bool msc;
-    double sval_threshold;
-    double fval_threshold;
-
-    std::string tfpath;   // optional
+    std::string tfpath;         // optional
 
 public:
     /**
@@ -110,14 +111,14 @@ public:
       *   @param  fname is the name of the config file
       */
     Config(const std::string fname) : configname(fname),
-        infilename(""), infiletype(""), tfpath(""),
-        grad_threshold(-1), error_threshold(-1), numiter(1), rkindex(1),
-        bader(false), vacuum_threshold(-1),
-        msc(false), sval_threshold(-1), fval_threshold(-1)
+        infilename(""), infiletype(""), fieldtype(""), tfpath(""),
+        do_bader(false), threshold_vacuum(-1),
+        do_msc(false), threshold_simp(-1), threshold_filt(-1),
+        threshold_grad(-1), threshold_error(-1), numiter(1), rkindex(1)
     {
-        for(int i = 0; i < 3; i++){
+        for(uint8_t i = 0; i < 3; i++){
             is_periodic[i] = 0;
-            grid_dims[i] = 0;
+            //grid_dims[i] = 0;
         }
     }
 
@@ -130,12 +131,13 @@ public:
 
         bool need_newline = false;
 
-        std::cout << " Parsing config file " << configname << "...";
+        std::cout << " Parsing config file (" << configname << ")...";
         fflush(stdout);
 
         std::ifstream infile( configname.c_str() );
         std::string line;
 
+        // read all known parameters
         while (std::getline(infile, line)) {
 
             line = Utils::trim(line);
@@ -151,56 +153,65 @@ public:
 
             Utils::toupper(p);
 
-            if(p == "INFILE"){            infilename = v;               continue;   }
-            if(p == "INFILETYPE"){        infiletype = Utils::toupper(v);   continue;   }
-            if(p == "THRESHOLD_GRAD"){    grad_threshold = stof(v);     continue;   }
-            if(p == "THRESHOLD_ERROR"){   error_threshold = stof(v);    continue;   }
-            if(p == "NUM_ITER"){          numiter = stoi(v);            continue;   }
-            if(p == "RK_INDEX"){          rkindex = stoi(v);            continue;   }
+            if(p == "INFILE"){            infilename = v;                           continue;   }
+            if(p == "INFILETYPE"){        infiletype = Utils::toupper(v);           continue;   }
+            if(p == "FIELDTYPE"){         fieldtype = Utils::toupper(v);            continue;   }
 
-            if(p == "GRID_DIMS"){
-                sscanf(v.c_str(), "%d %d %d", &grid_dims[0], &grid_dims[1], &grid_dims[2]);
-                continue;
-            }
             if(p == "PERIODIC_DOMAIN"){
                 sscanf(v.c_str(), "%d %d %d", &is_periodic[0], &is_periodic[1], &is_periodic[2]);
                 continue;
             }
 
-            if(p == "BADER_VOLUMES"){       bader = (Utils::toupper(v) == "TRUE");  continue;   }
-            if(p == "THRESHOLD_VACUUM"){    vacuum_threshold = stof(v);             continue;   }
-            if(p == "MOLECULAR_GRAPH"){     msc = (Utils::toupper(v) == "TRUE");    continue;   }
-            if(p == "THRESHOLD_SIMPL"){     sval_threshold = stof(v);               continue;   }
-            if(p == "THRESHOLD_FILT"){      fval_threshold = stof(v);               continue;   }
+            if(p == "BADER_VOLUMES"){     do_bader = (Utils::toupper(v) == "TRUE"); continue;   }
+            if(p == "THRESHOLD_VACUUM"){  threshold_vacuum = stof(v);               continue;   }
 
-            if(p == "TRANSFER_FUNC"){       tfpath = v;                             continue;   }
+            if(p == "MOLECULAR_GRAPH"){   do_msc = (Utils::toupper(v) == "TRUE");   continue;   }
+            if(p == "THRESHOLD_SIMPL"){   threshold_simp = stof(v);                 continue;   }
+            if(p == "THRESHOLD_FILT"){    threshold_filt = stof(v);                 continue;   }
+
+            if(p == "THRESHOLD_GRAD"){    threshold_grad = stof(v);                 continue;   }
+            if(p == "THRESHOLD_ERROR"){   threshold_error = stof(v);                continue;   }
+            if(p == "NUM_ITER"){          numiter = stoi(v);                        continue;   }
+            if(p == "RK_INDEX"){          rkindex = stoi(v);                        continue;   }
+
+            if(p == "TRANSFER_FUNC"){     tfpath = v;                             continue;   }
+
+            std::cerr << "\n    Config::parse() - Ignoring unknown parameter: " << line;
+            need_newline = true;
         }
 
-        // check if everytiong is in order
+        // check if everything is in order
         if (infilename.length() == 0) {
-            std::cerr << "\n\tConfig::parse() - Filename not specified. Aborting!\n";
+            std::cerr << "\n    Config::parse() - Filename not specified. Aborting!\n";
             exit(1);
         }
         if (infiletype.length() == 0) {
-            std::cerr << "\n\tConfig::parse() - Filetype not specified. Aborting!\n";
+            std::cerr << "\n    Config::parse() - Filetype not specified. Aborting!\n";
+            exit(1);
+        }
+        if (fieldtype.length() == 0) {
+            std::cerr << "\n    Config::parse() - Fieldtype not specified. Aborting!\n";
+            exit(1);
+        }
+        if (fieldtype != "CHG" && fieldtype != "POT") {
+            std::cerr << "\n    Config::parse() - Invalid Fieldtype ("<<fieldtype<<"). Expected CHG or POT. Aborting!\n";
             exit(1);
         }
 
-        if(msc){    bader = true;   }
-        if(vacuum_threshold < 0){
-            std::cout << "\n\tConfig::parse() - THRESHOLD_VACUUM not found. defaulting to 0.001";
+        if(threshold_vacuum < 0){
+            threshold_vacuum = 0.1;
+            std::cout << "\n    Config::parse() - THRESHOLD_VACUUM not found. defaulting to " << threshold_vacuum;
             need_newline = true;
-            vacuum_threshold = 0.1;
         }
-        if(sval_threshold < 0){
-            std::cout << "\n\tConfig::parse() - THRESHOLD_SIMPL not found. defaulting to 1.0";;
+        if(threshold_simp < 0){
+            threshold_simp = 1.0;
+            std::cout << "\n    Config::parse() - THRESHOLD_SIMPL not found. defaulting to " << threshold_simp;
             need_newline = true;
-            sval_threshold = 1.0;
         }
-        if(fval_threshold < 0){
-            std::cout << "\n\tConfig::parse() - THRESHOLD_FILT not found. defaulting to 1.0";
+        if(threshold_filt < 0){
+            threshold_filt = 1.0;
+            std::cout << "\n    Config::parse() - THRESHOLD_FILT not found. defaulting to " << threshold_filt;
             need_newline = true;
-            fval_threshold = 1.0;
         }
         if(need_newline)
             std::cout << std::endl;

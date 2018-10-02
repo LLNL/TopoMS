@@ -70,7 +70,7 @@ purposes.
  *
  */
 
-//#define OUTPUT_DEBUG_FIELDS
+#include <cassert>
 
 // -----------------------------------------------------------------------
 // TopoMS headers
@@ -78,6 +78,7 @@ purposes.
 #include "InputFormats.h"
 #include "MolecularSystem.h"
 #include "TopoMS.h"
+#include "MSCBond.h"
 
 // -----------------------------------------------------------------------
 // MSC headers
@@ -103,50 +104,69 @@ purposes.
 #include "morse_smale_complex_restricted.h"
 #include "kdtree.h"
 #include "msc_selectors.h"
+#include "msc_iterators.h"
 #include "numeric_streamline_integrator.h"
+
+#ifdef USE_VTK
+    #include "vtkVolumeSlicer.h"
+#endif
 
 // -----------------------------------------------------------------------------------------
 // these wrappers are needed so rest of the code remains independent of the MSC headers
 // -----------------------------------------------------------------------------------------
 
-bool TopoMS::msc_available() const {
-    return this->m_msc != 0;
+bool TopoMS::msc_is_available() const {              return this->m_msc != nullptr;         }
+size_t TopoMS::msc_get_nnodes() const {              return this->m_msc->numNodes();        }
+size_t TopoMS::msc_get_narcs() const {               return this->m_msc->numArcs();         }
+
+bool TopoMS::msc_is_nodeAlive(size_t idx) const {   return this->m_msc->isNodeAlive(idx);   }
+bool TopoMS::msc_is_arcAlive(size_t idx) const {    return this->m_msc->isArcAlive(idx);    }
+bool TopoMS::msc_is_nodeFiltered(size_t idx) const {
+    return (fabs(this->m_msc->getNode(idx).value) > fabs(this->filter_val));
 }
 
-void TopoMS::cellid2Coords(const INDEX_TYPE &cellIdx, MSC::Vec3l &ncoords) const {
-    m_tgrid->cellid2Coords(cellIdx, ncoords);
+int TopoMS::msc_get_nodeDim(size_t idx) const {
+    const MSC::node<FLOATTYPE> &n = this->m_msc->getNode(idx);
+    return (this->m_negated) ? 3-n.dim : n.dim;
+}
+int TopoMS::msc_get_arcDim(size_t idx) const {
+    if(this->m_negated)     return this->msc_get_nodeDim(this->m_msc->getArc(idx).upper);
+    else                    return this->msc_get_nodeDim(this->m_msc->getArc(idx).lower);
 }
 
-size_t TopoMS::get_msc_nnodes() const {
-    return this->m_msc->numNodes();
+void TopoMS::msc_cellid_to_gcoords(const INDEX_TYPE &cellIdx, MSC::Vec3d &ncoords) const {
+
+    MSC::Vec3l lcoord;
+    m_tgrid->cellid2Coords(cellIdx, lcoord);
+    ncoords = MSC::Vec3d(lcoord);
+    ncoords *= 0.5;
+}
+void TopoMS::msc_gcoords_to_wcoords(const MSC::Vec3d &ncoords, float wcoords[]) const {
+    float gcoords[3] = {ncoords[0], ncoords[1], ncoords[2]};
+    m_metadata.grid_to_world(gcoords, wcoords);
+}
+void TopoMS::msc_cellid_to_wcoords(const INDEX_TYPE &cellIdx, float wcoords[]) const {
+
+    MSC::Vec3d ncoords;
+    this->msc_cellid_to_gcoords(cellIdx, ncoords);
+
+    float gcoords[3] = {ncoords[0], ncoords[1], ncoords[2]};
+    m_metadata.grid_to_world(gcoords, wcoords);
 }
 
-bool TopoMS::get_msc_isNodeAlive(size_t idx) const {
-    return this->m_msc->isNodeAlive(idx);
-}
+bool TopoMS::msc_get_node(size_t idx, int &dim, INDEX_TYPE &cellIdx, MSC::Vec3d &ncoords) const {
 
-bool TopoMS::get_msc_isNodeFiltered(size_t idx) const {
-    MSC::node<FLOATTYPE> & n = this->m_msc->getNode(idx);
-    return ( fabs(n.value) > fabs(this->filter_val) );
-}
-
-bool TopoMS::get_msc_node(size_t idx, int &dim, INDEX_TYPE &cellIdx, MSC::Vec3l &ncoords) const {
-    MSC::node<FLOATTYPE> & n = this->m_msc->getNode(idx);
-    dim = n.dim;
-    if(this->m_negated){
-        dim = 3-dim;
-    }
+    const MSC::node<FLOATTYPE> &n = this->m_msc->getNode(idx);
     cellIdx = n.cellindex;
-    m_tgrid->cellid2Coords(cellIdx, ncoords);
+    dim = (this->m_negated) ? 3-n.dim : n.dim;
+    this->msc_cellid_to_gcoords(cellIdx, ncoords);
 }
 
-const std::vector<INDEX_TYPE> TopoMS::get_extrema() const {
-    if(m_integrator == 0)
-        return std::vector<INDEX_TYPE>();
-    return m_integrator->GetExtrema();
+void TopoMS::msc_get_arcGeometry(size_t idx, std::vector<INDEX_TYPE> &arc_geom) const {
+    this->m_msc->fillArcGeometry(idx, arc_geom);
 }
 
-void TopoMS::print_node(size_t idx) const {
+void TopoMS::msc_print_node(size_t idx) const {
 
     const MSC::node<FLOATTYPE> &n = this->m_msc->getNode(idx);
     int dim = n.dim;
@@ -162,20 +182,41 @@ void TopoMS::print_node(size_t idx) const {
                        (dim == 2) ? "2-sad" :
                        (dim == 3) ? "max" : "unknown";
 
-    MSC::Vec3l ncoords;
-    m_tgrid->cellid2Coords(n.cellindex, ncoords);
+    MSC::Vec3d ncoords;
+    this->msc_cellid_to_gcoords(n.cellindex, ncoords);
     printf(" %s (node %d) at (%.1f %.1f %.1f) val = %f\n", type.c_str(), idx,
-                        0.5*ncoords[0], 0.5*ncoords[1], 0.5*ncoords[2], val
-            );
+                        ncoords[0], ncoords[1], ncoords[2], val);
 }
 
+// -----------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------------------
+const std::vector<long long> &TopoMS::bader_get_extrema() const {
+    if(m_integrator == 0)
+        return std::vector<INDEX_TYPE>();
+    return m_integrator->GetExtrema();
+}
+
+int TopoMS::bader_get_atomLabeling(INDEX_TYPE vIdx) const {
+    int extIdx = (*m_volumelabeling)[vIdx];
+    int atomIdx = (extIdx == -2 ) ? 0 : extrema2atoms[extIdx];
+    return atomIdx;
+}
+int TopoMS::bader_get_atomLabeling(size_t x, size_t y, size_t z) const {
+    return this->bader_get_atomLabeling(this->m_metadata.grid_to_idx(x,y,z));
+}
+int TopoMS::bader_get_atomLabeling(double pos[3]) const {
+    return this->bader_get_atomLabeling(size_t(pos[0]), size_t(pos[1]), size_t(pos[2]));
+}
+
+// -----------------------------------------------------------------------------------------
+// functions for kd-tree handling
 // -----------------------------------------------------------------------------------------
 
 bool TopoMS::kdtree_add(MSC::kdtree* kt, double x, double y, double z, int data) const {
 
-    static const INDEX_TYPE X = m_config->grid_dims[0];
-    static const INDEX_TYPE Y = m_config->grid_dims[1];
-    static const INDEX_TYPE Z = m_config->grid_dims[2];
+    static const INDEX_TYPE X = m_metadata.m_grid_dims[0];
+    static const INDEX_TYPE Y = m_metadata.m_grid_dims[1];
+    static const INDEX_TYPE Z = m_metadata.m_grid_dims[2];
 
     static const int sx = m_config->is_periodic[0] ? -1 : 0;
     static const int sy = m_config->is_periodic[1] ? -1 : 0;
@@ -200,7 +241,6 @@ bool TopoMS::kdtree_add(MSC::kdtree* kt, double x, double y, double z, int data)
         kd_insert(kt, kpos, kdata);
     }
 }
-
 int TopoMS::kdtree_query(MSC::kdtree *kt, const double pos[3]) const {
 
     MSC::kdres* res = kd_nearest(kt, pos);
@@ -216,94 +256,127 @@ int TopoMS::kdtree_query(MSC::kdtree *kt, const double pos[3]) const {
 // -----------------------------------------------------------------------------------------
 // load
 // -----------------------------------------------------------------------------------------
-bool TopoMS::load(const std::string &configfilename) {
+
+bool TopoMS::load(const std::string &configfilename, std::string datafile) {
 
     Utils::print_separator();
-    std::cout << " =====>> Loading data using " << configfilename << "...\n";
+    std::cout << "\n =====>> Loading data using " << configfilename << "...\n";
 
-    m_config = new Config( configfilename );
+    m_config = new Config(configfilename);
     m_config->parse();
 
-    std::string extn = Utils::get_extn( m_config->infilename );
+    // overwrite the file
+    if (datafile.length() > 0) {        
+        std::cout << " Overwriting the input file ("<<m_config->infilename<<") with argument ("<<datafile<<")\n";
+        m_config->infilename = datafile;
+    }
+
+    //std::string extn = Utils::get_extn(m_config->infilename);
     m_datadir = Utils::get_directory(m_config->infilename);
 
     // -----------------------------------------------------------------------
 
     if (m_config->infiletype == "VASP") {
-
-        m_func = MS::VASP::read_CHGCAR<FLOATTYPE>(m_config->infilename, m_metadata, m_atoms);
+        m_func = MS::VASP::read_CAR<FLOATTYPE>(m_config->infilename, m_metadata, m_atoms);
         this->m_inputtype = IT_VASP;
     }
     else if (m_config->infiletype == "CUBE") {
-
         m_func = MS::Cube::read<FLOATTYPE>(m_config->infilename, m_metadata, m_atoms);
         this->m_inputtype = IT_CUBE;
     }
-    for(int i = 0; i < 3; i++)
-        m_config->grid_dims[i] = m_metadata.m_grid_dims[i];
 
-    m_metadata.print ();
     if (m_metadata.grid_sz() == 0) {
         std::cerr << " Failed to read the input file correctly! got 0 grid values!\n";
         exit(1);
     }
-
-    // ------------------------------------
-    {
-        const size_t nsz = m_metadata.grid_sz();
-
-        const FLOATTYPE minval = *std::min_element(m_func, m_func+nsz);
-        const FLOATTYPE maxval = *std::max_element(m_func, m_func+nsz);
-        const FLOATTYPE sumval = std::accumulate(m_func, m_func+m_metadata.grid_sz(), 0.0);
-
-        printf("\n num atoms = %d\n", m_atoms.size());
-        printf(" function range [%f %f]\n", minval, maxval);
-
-        // integration as a charge
-        const FLOATTYPE chg_factor = (this->m_inputtype == IT_CUBE) ? m_metadata.volume() / (m_metadata.m_l_unit*m_metadata.m_l_unit*m_metadata.m_l_unit) / m_metadata.m_e_unit : 1.0;
-        const FLOATTYPE totchg = sumval * chg_factor / (FLOATTYPE) m_metadata.grid_sz();
-
-        printf(" integration as charge = %f\n", totchg);
-        printf(" vol = %f, lunit = %f, eunit = %f : chg_factor = %f\n", m_metadata.volume(), m_metadata.m_l_unit, m_metadata.m_e_unit, chg_factor);
+    for(uint8_t i = 0; i < 3; i++){
+        if (m_metadata.m_grid_dims[i] < 2) {
+            std::cerr << "Incorrect grid! [" <<
+                         m_metadata.m_grid_dims[0] << ", " <<
+                         m_metadata.m_grid_dims[1] << ", " <<
+                         m_metadata.m_grid_dims[2] << "]\n";
+            exit(1);
+        }
     }
 
-    // ------------------------------------
+
+    if (m_config->fieldtype == "CHG") {             this->m_fieldtype = FT_CHG;         }
+    else if (m_config->fieldtype == "POT") {        this->m_fieldtype = FT_POT;         }
+
+    m_metadata.print ();
+
+    // -----------------------------------------------------------------------
+    const size_t nsz = m_metadata.grid_sz();
+    const FLOATTYPE minval = *std::min_element(m_func, m_func+nsz);
+    const FLOATTYPE maxval = *std::max_element(m_func, m_func+nsz);
+
+    std::cout << "    # atoms = " << m_atoms.size() << "\n";
+    std::cout << "    function range = [" << minval << ", " << maxval<< "]\n";
+
+    // -----------------------------------------------------------------------
+
+#ifdef USE_VTK
+    m_vtkFunction = this->create_vtkImagedata(m_func, "function");
+    m_slicer_function = new vtkVolumeSlicer();
+    m_slicer_function->set_volume(m_vtkFunction);
+#endif
+
     return true;
 }
 
 // use configuration file to initialize the program
 bool TopoMS::init() {
 
-    printf("\n\n =====>> Initializing TopoMS\n");
+    Utils::print_separator();
+    std::cout << "\n =====>> Initializing TopoMS\n";
+
+    // -----------------------------------------------------------------------
+    // compute bader for CHG, if msc needs to be computed
+    if (m_fieldtype == FT_CHG && m_config->do_msc) {
+        m_config->do_bader = true;
+        std::cout << " -- Enabling Bader anlaysis since you asked for Molecular Graph!\n";
+    }
+
+    // bader must be computed only for CHG
+    if (m_fieldtype != FT_CHG) {
+        m_config->do_bader = false;
+        std::cout << " -- Disabling Bader anlaysis since the input is not charge density!\n";
+    }
 
     MSC::ThreadedTimer timer(1);
     timer.StartGlobal();
 
-    m_grid = new MSC::RegularGrid(
-                MSC::Vec3i(m_config->grid_dims[0], m_config->grid_dims[1], m_config->grid_dims[2]),
-                MSC::Vec3b(m_config->is_periodic[0], m_config->is_periodic[1], m_config->is_periodic[2]));
+    m_grid = new MSC::RegularGrid(MSC::Vec3i(m_metadata.m_grid_dims[0], m_metadata.m_grid_dims[1], m_metadata.m_grid_dims[2]),
+                                  MSC::Vec3b(m_config->is_periodic[0], m_config->is_periodic[1], m_config->is_periodic[2]));
 
     m_gridfunc = new MSC::RegularGridTrilinearFunction(m_grid, m_func);
     m_gridfunc->ComputeGradFromImage(1);
 
-    printf(" --- now negating the value!\n");
-    m_negated = true;
-    m_gridfunc->Negate();
+    if (1) {
+        std::cout << " -- Negating the function.";
+        m_negated = true;
+        m_gridfunc->Negate();
+
+        const size_t nsz = m_metadata.grid_sz();
+        const FLOATTYPE minval = *std::min_element(m_func, m_func+nsz);
+        const FLOATTYPE maxval = *std::max_element(m_func, m_func+nsz);
+        std::cout << " new function range = [" << minval << ", " << maxval<< "]\n";
+
+    }
 
 
-    size_t nsz = m_config->grid_dims[0]*m_config->grid_dims[1]*m_config->grid_dims[2];
-    const FLOATTYPE minval = *std::min_element(m_func, m_func+nsz);
-    const FLOATTYPE maxval = *std::max_element(m_func, m_func+nsz);
-    printf(" function range [%f %f]\n", minval, maxval);
+    persistence_val = m_config->threshold_simp;
+    filter_val = m_config->threshold_filt;
 
-    persistence_val = m_config->sval_threshold;
-    filter_val = m_config->fval_threshold;
-
-    printf("\n =====>> TopoMS initialized!");
+    std::cout << "\n =====>> TopoMS initialized!";
     timer.EndGlobal ();
     timer.PrintAll ();
 }
 
+
+// -----------------------------------------------------------------------------------------
+// bader analysis
+// -----------------------------------------------------------------------------------------
 /**
   *   @brief  Perform Bader analysis
   *
@@ -312,7 +385,7 @@ bool TopoMS::init() {
 
 bool TopoMS::bader() {
 
-    if(!m_config->bader)
+    if(!m_config->do_bader)
         return false;
 
     // ---------------------------------------------------------------------
@@ -322,60 +395,52 @@ bool TopoMS::bader() {
     const size_t num_atoms = m_atoms.size();
     const size_t num_gridPts = m_metadata.grid_sz();
 
-    const FLOATTYPE vol_box = m_metadata.volume();
-    const FLOATTYPE vol_voxel = vol_box / (FLOATTYPE) num_gridPts;
+    const FLOATTYPE vol_box = m_metadata.volume_box();
+    const FLOATTYPE vol_voxel = m_metadata.volume_voxel();
+    const FLOATTYPE vol_box_angs = m_metadata.volume_box_in_Angs();
+    const FLOATTYPE vol_voxel_angs = m_metadata.volume_voxel_in_Angs();
 
-    // ---------------------------------------------------------------------
-    // ---------------------------------------------------------------------
-    // handle different types of units
-        // l-unit and e-unit are set properly by file reading module
+    const FLOATTYPE file_to_ae = m_metadata.volume_file2Angs() * m_metadata.charge_file2electrons();
 
-    const FLOATTYPE vol_Bohr2Angs = 1.0 / std::pow(m_metadata.m_l_unit, 3.0);
-    const FLOATTYPE chg_hartree2e = 1.0 / m_metadata.m_e_unit;
+   // ---------------------------------------------------------------------
+   // ---------------------------------------------------------------------
 
-    printf(" vol(box) = %E %s^3, %E Angs^3\n vol(voxel) = %E %s^3, %E Angs^3\n",
-            vol_box, m_metadata.m_coordinate_unit.c_str(), vol_box*vol_Bohr2Angs,
-            vol_voxel, m_metadata.m_coordinate_unit.c_str(), vol_voxel*vol_Bohr2Angs);
+   // the function value in VASP file is the number of electrons per voxel
+       // it is the charge density multiplied by the total volume
+       // therefore, to get the total number of electrons, multiply by the unit voxel volume ( / number of voxels)
+           // charge is in e
+           // voxel volume is in Angs
 
-    // ---------------------------------------------------------------------
-    // ---------------------------------------------------------------------
-
-    // the function value in VASP file is the number of electrons per voxel
-        // it is the charge density multiplied by the total volume
-        // therefore, to get the total number of electrons, multiply by the unit voxel volume ( / number of voxels)
-            // charge is in e
-            // voxel volume is in Angs
-
-    // the function value in Cube file is the charge density per voxel
-            // charge is in e or hartree
-            // voxel volume is in unit grid volume (since the value is divided by total volume)
-        // therefore, to get the total number of electrons, multiply by the voxel volume (total volume / number of voxels)
+   // the function value in Cube file is the charge density per voxel
+           // charge is in e or hartree
+           // voxel volume is in unit grid volume (since the value is divided by total volume)
+       // therefore, to get the total number of electrons, multiply by the voxel volume (total volume / number of voxels)
 
     // to convert from the charge density to actual charge (in e)
-    const FLOATTYPE chgDens_fileUnit2e = (this->m_inputtype == IT_CUBE ? vol_box * chg_hartree2e * vol_Bohr2Angs : 1.0) / (FLOATTYPE) num_gridPts;
+    const FLOATTYPE chgDens_fileUnit2e = (this->m_inputtype == IT_CUBE ? vol_box * file_to_ae : 1.0) / (FLOATTYPE) num_gridPts;
 
-    //printf(" factor to convert chg density [file units] to chg [electrons] = %E\n", chgDens_fileUnit2e);
+    // ---------------------------------------------------------------------
+    // for fast thresholding, convert the vacuum threshold to the same unit as the file (so i can do a point-wise comparison later)
+    vacthreshold_in_fileUnits = m_config->threshold_vacuum * (this->m_inputtype == IT_CUBE ? 1.0 / file_to_ae : vol_box);
 
     // ---------------------------------------------------------------------
     // sum of function values
-#ifdef USE_KAHAN_SUM
     const FLOATTYPE sum_func = (this->m_negated ? -1 : 1) * Utils::Kahan::sum(m_func, m_metadata.grid_sz());
-#else
-    const FLOATTYPE sum_func = (this->m_negated ? -1 : 1) * Utils::sum(m_func, m_metadata.grid_sz());
-#endif
     const FLOATTYPE total_chg = sum_func * chgDens_fileUnit2e;
 
-    // ---------------------------------------------------------------------
-    // vacuum threshold
-
-    // for fast thresholding, convert the vacuum threshold to the same unit as the file (so i can do a point-wise comparison later)
-    const FLOATTYPE vacthreshold_in_fileUnits = m_config->vacuum_threshold *
-                                                    (this->m_inputtype == IT_CUBE ? 1.0 / (chg_hartree2e * vol_Bohr2Angs) : vol_box);
-
-    printf("\n");
     Utils::print_separator();
-    printf(" =====>> Performing Bader Analysis\n\t total volume = %f Ang^3, total chg = %f e\n\t vacuum threshold = %E (in file units) = %E e per Angs^3\n\n",
-                     vol_box*vol_Bohr2Angs, total_chg, vacthreshold_in_fileUnits, m_config->vacuum_threshold);
+    printf("\n =====>> Performing Bader Analysis\n");
+    if (m_metadata.is_lunit_Angstrom()) {
+        printf("\t total volume = %f Ang^3\n", vol_box_angs);
+        printf("\t voxel volume = %f Ang^3\n", vol_voxel_angs);
+    }
+    else {
+        printf("\t total volume = %f Ang^3 (= %f %s^3)\n", vol_box_angs, vol_box, m_metadata.m_length_unit.c_str());
+        printf("\t voxel volume = %f Ang^3 (= %f %s^3)\n", vol_voxel_angs, vol_voxel, m_metadata.m_length_unit.c_str());
+    }
+    printf("\t total chg = %f e\n", total_chg);
+    printf("\t vacuum threshold = %E e per Ang^3 (= %E, in file units)\n\n", m_config->threshold_vacuum, vacthreshold_in_fileUnits);
+
 
     MSC::ThreadedTimer timer(1);
     timer.StartGlobal();
@@ -384,7 +449,7 @@ bool TopoMS::bader() {
     // volume decomposition
     // ---------------------------------------------------------------------
 
-    const MSC::DenseLabeling<int> *volumelabeling = 0;
+    m_volumelabeling = 0;
     {
 
         bool verbose = false;
@@ -393,15 +458,10 @@ bool TopoMS::bader() {
         ltimer.StartGlobal();
 
         printf(" -- Performing numeric integration for volume assignment");
-        if (verbose) {
-            printf("\n");
-        }
-        else {
-            printf("...");
-            fflush(stdout);
-        }
+        if (verbose) {  printf("\n");                   }
+        else {          printf("...");  fflush(stdout); }
 
-        m_integrator = new MSC::IntegratorType(m_gridfunc, m_grid, m_config->error_threshold, m_config->grad_threshold, m_config->numiter);
+        m_integrator = new MSC::IntegratorType(m_gridfunc, m_grid, m_config->threshold_error, m_config->threshold_grad, m_config->numiter);
         m_integrator->set_filter(vacthreshold_in_fileUnits);                         // the integrator will not seed a streamline for smaller values
 
         m_integrator->BeginIntegration(verbose);
@@ -414,13 +474,13 @@ bool TopoMS::bader() {
 #endif
 
         // cleanup noise: do this only if you need msc as well
-        if (this->m_config->msc ) {
+        if (this->m_config->do_msc) {
             m_integrator2 = new MSC::RegionRemoverType(m_gridfunc, m_integrator->GetOutputLabels(), &(m_integrator->GetExtrema()));
             m_integrator2->ComputeOutput(verbose);
-            volumelabeling = m_integrator2->GetOutputLabelsUnmasked();
+            m_volumelabeling = m_integrator2->GetOutputLabelsUnmasked();
         }
         else {
-            volumelabeling = m_integrator->GetOutputLabels();
+            m_volumelabeling = m_integrator->GetOutputLabels();
         }
 
 #ifdef OUTPUT_DEBUG_FIELDS
@@ -428,12 +488,8 @@ bool TopoMS::bader() {
         m_integrator2->GetOutputLabels()->OutputToIntFile(fname.c_str());
 #endif
 
-        if(verbose) {
-            printf(" -- Done numeric integration of 3d volume!");
-        }
-        else {
-            printf("Done!");
-        }
+        if(verbose) {   printf(" -- Done numeric integration of 3d volume!");   }
+        else {          printf(" Done!");                                       }
         ltimer.EndGlobal ();
         ltimer.PrintAll ();
     }
@@ -443,8 +499,8 @@ bool TopoMS::bader() {
 
     const std::vector<INDEX_TYPE> &extrema = m_integrator->GetExtrema();
 
-    size_t numextrema = extrema.size();
-    INDEX_TYPE numlabels = volumelabeling->GetNumLabels();
+    const size_t numextrema = extrema.size();
+    INDEX_TYPE numlabels = m_volumelabeling->GetNumLabels();
 
     // ---------------------------------------------------------------------
     // atom--extrema mapping
@@ -522,21 +578,18 @@ bool TopoMS::bader() {
         chg_extrema.resize(numextrema+1, 0.0);
         vol_extrema.resize(numextrema+1, 0.0);
 
-#ifdef USE_KAHAN_SUM
         // temporary for kahan
         Utils::Kahan::KahanObject<FLOATTYPE> kinit {0};
-
         std::vector<Utils::Kahan::KahanObject<FLOATTYPE> > kchg_atoms(num_atoms+1, kinit);
         std::vector<Utils::Kahan::KahanObject<FLOATTYPE> > kchg_extrema(numextrema+1, kinit);
-#endif
 
         for(INDEX_TYPE vIdx = 0; vIdx < numlabels; vIdx++){
 
             const FLOATTYPE value = (this->m_negated ? -1 : 1) * m_gridfunc->SampleImage(vIdx);
 
-            int extIdx = (*volumelabeling)[vIdx];
+            int extIdx = (*m_volumelabeling)[vIdx];
 
-            int atomIdx = ( fabs(value) <= vacthreshold_in_fileUnits || extIdx == -2 ) ? 0 : extrema2atoms[ extIdx ];
+            int atomIdx = (fabs(value) <= vacthreshold_in_fileUnits || extIdx == -2 ) ? 0 : extrema2atoms[extIdx];
             extIdx = (extIdx == -2) ? 0 : extIdx+1;
 
             labels_atoms[vIdx] = atomIdx;
@@ -545,49 +598,37 @@ bool TopoMS::bader() {
             labels_extrema[vIdx] = extIdx;
             vol_extrema[extIdx] += 1.0;
 
-#ifdef USE_KAHAN_SUM
-            kchg_atoms[atomIdx] = Utils::Kahan::KahanSum( kchg_atoms[atomIdx], value );
-            kchg_extrema[extIdx] = Utils::Kahan::KahanSum( kchg_extrema[extIdx], value );
-#else
-            chg_atoms[atomIdx] += value;
-            chg_extrema[maxIdx] += value;
-#endif
+            kchg_atoms[atomIdx] = Utils::Kahan::KahanSum(kchg_atoms[atomIdx], value);
+            kchg_extrema[extIdx] = Utils::Kahan::KahanSum(kchg_extrema[extIdx], value);
         }
 
-#ifdef USE_KAHAN_SUM
         // convert from Kahan to normal
-        for(int k = 0; k < chg_atoms.size(); k++){      chg_atoms[k] = kchg_atoms[k].sum;       }
-        for(int k = 0; k < chg_extrema.size(); k++){    chg_extrema[k] = kchg_extrema[k].sum;   }
-#endif
+        for(size_t k = 0; k < chg_atoms.size(); k++){      chg_atoms[k] = kchg_atoms[k].sum;       }
+        for(size_t k = 0; k < chg_extrema.size(); k++){    chg_extrema[k] = kchg_extrema[k].sum;   }
+
         // ---------------------------------------------------------------------
         // normalize
-
         {
-#ifdef USE_KAHAN_SUM
-            FLOATTYPE vsm = Utils::Kahan::sum(vol_atoms);
-            FLOATTYPE sum_atoms = Utils::Kahan::sum(chg_atoms);
-            FLOATTYPE sum_extrema = Utils::Kahan::sum(chg_extrema);
-#else
-            FLOATTYPE vsm = Utils::sum(vol_atoms);
-            FLOATTYPE sum_atoms = Utils::sum(chg_atoms);
-            FLOATTYPE sum_extrema = Utils::sum(chg_extrema);
-#endif
-            if( size_t(vsm) != numlabels) {
-                printf(" \n ---> error in vol integration: %d != %f\n", numlabels, vsm);
-                //exit(1);
+            const FLOATTYPE sum_avol = Utils::Kahan::sum(vol_atoms);
+            const FLOATTYPE sum_achg = Utils::Kahan::sum(chg_atoms);
+            const FLOATTYPE sum_echg = Utils::Kahan::sum(chg_extrema);
+
+            if(size_t(sum_avol) != numlabels) {
+                std::cerr << " \n ---> error in vol integration: " << numlabels << " != " << sum_avol << "\n";
+                exit(1);
             }
 
-            if ( fabs(sum_atoms - sum_func) > powf(10, -6) || fabs(sum_extrema - sum_func) > powf(10, -6)) {
-                printf(" \n ---> error in chg integration: %f != %f, %f (%f, %f)\n", sum_func,
-                       sum_atoms, sum_extrema, (sum_atoms-sum_func), (sum_extrema-sum_func));
-                //exit(1);
+            if (fabs(sum_achg - sum_func) > 0.000001 || fabs(sum_echg - sum_func) > 0.000001) {
+                std::cerr << " \n ---> error in chg integration: " << sum_func << " != " << sum_achg << ", " <<
+                                sum_echg << " (" << (sum_achg-sum_func) << ", " << (sum_echg-sum_func) << std::endl;
+                exit(1);
             }
         }
 
         std::transform(vol_atoms.begin(), vol_atoms.end(), vol_atoms.begin(), std::bind1st(std::multiplies<FLOATTYPE>(), vol_voxel));
-        std::transform(chg_atoms.begin(), chg_atoms.end(), chg_atoms.begin(), std::bind1st(std::multiplies<FLOATTYPE>(), chgDens_fileUnit2e));
-
         std::transform(vol_extrema.begin(), vol_extrema.end(), vol_extrema.begin(), std::bind1st(std::multiplies<FLOATTYPE>(), vol_voxel));
+
+        std::transform(chg_atoms.begin(), chg_atoms.end(), chg_atoms.begin(), std::bind1st(std::multiplies<FLOATTYPE>(), chgDens_fileUnit2e));
         std::transform(chg_extrema.begin(), chg_extrema.end(), chg_extrema.begin(), std::bind1st(std::multiplies<FLOATTYPE>(), chgDens_fileUnit2e));
 
         printf("Done!");
@@ -595,50 +636,77 @@ bool TopoMS::bader() {
         ltimer.PrintAll();
     }
 
+    printf("\n =====>> Bader analysis finished!");
+    timer.EndGlobal ();
+    timer.PrintAll ();
+
     // ---------------------------------------------------------------------
     // print summary
     // ---------------------------------------------------------------------
 
-#ifdef USE_KAHAN_SUM
+    size_t zeroAtoms = 0;
     FLOATTYPE vsum = Utils::Kahan::sum(vol_atoms);
     FLOATTYPE csum = Utils::Kahan::sum(chg_atoms);
-#else
-    FLOATTYPE vsum = Utils::sum(vol_atoms);
-    FLOATTYPE csum = Utils::sum(chg_atoms);
+
+    std::cout << "\t total : chg = " << csum << ", vol = " << vsum << std::endl;
+    std::cout << "\t vacuum: chg = " << chg_atoms[0] <<", vol = " << vol_atoms[0] << "\n";
+    for(size_t i = 1; i < vol_atoms.size(); i++) {
+        std::cout << "\t atom " << i << ": chg = " << chg_atoms[i] <<", vol = " << vol_atoms[i] << "\n";
+
+        if (fabs(vol_atoms[i]) < 0.000001 || fabs(chg_atoms[i]) < 0.000001){
+            std::cout << "\t --> atom " << i << " has zero chg (" << chg_atoms[i] <<") or vol (" << vol_atoms[i] << ")\n";
+            zeroAtoms ++;
+        }
+    }
+    if (zeroAtoms > 0) {
+        std::cout << " Bader analysis failed for " << zeroAtoms << " atoms!\n";
+        exit(1);
+    }
+
+#ifdef USE_VTK
+    m_vtkVolLabeling = this->create_vtkImagedata("volLabeling");
+    m_slicer_label = new vtkVolumeSlicer();
+    m_slicer_label->set_volume(m_vtkVolLabeling);
 #endif
-    printf("\tTotal volume = %f, vaccum volume = %f.\n", vsum, vol_atoms.front());
-    printf("\tTotal charge = %f, vaccum charge = %f.\n", csum, chg_atoms.front());
-    //printf(" sum of function over all grid points = %f, %f\n", get_fsum(), get_fint());
-
-    printf("\n =====>> Bader analysis finished!");
-    timer.EndGlobal ();
-    timer.PrintAll ();
-    Utils::print_separator();
-
-    // ---------------------------------------------------------------------
-    // ---------------------------------------------------------------------
     return true;
 }
 
 /**
-  *   @brief  Extract the molecular graph using MSC library
+  *   @brief  Extract the complete topologuical graph using MSC library
   *
   *   @return success flag
   */
 
 bool TopoMS::msc() {
 
-    if(!m_config->msc)
+    if(!m_config->do_msc)
         return false;
 
     Utils::print_separator();
-    printf(" =====>> Extracting Molecular Graph\n\n");
+    printf("\n =====>> Extracting Topological Graph\n\n");
+
+    const FLOATTYPE vacthreshold = m_config->threshold_vacuum * m_metadata.volume_box();
 
     MSC::ThreadedTimer timer(1);
     timer.StartGlobal();
 
-    m_tgrid = new MSC::GridType(m_grid);
-    //RunMeshConsistencyChecks(m_tgrid);
+    {
+
+        MSC::ThreadedTimer ltimer(1);
+        ltimer.StartGlobal();
+
+        printf(" -- Creating TopologicalRegularGrid...");
+        fflush(stdout);
+
+        m_tgrid = new MSC::GridType(m_grid);
+#ifdef DEBUG
+        //RunMeshConsistencyChecks(m_tgrid);
+#endif
+
+        printf(" Done!");
+        ltimer.EndGlobal();
+        ltimer.PrintAll();
+    }
 
     // ---------------------------------------------------------------------
     // compute a dense function (defined on every cell of the topo mesh)
@@ -655,7 +723,7 @@ bool TopoMS::msc() {
         m_topofunc->copyVertexValuesFromGridFunction(m_gridfunc);
         m_topofunc->setCellValuesMaxOfVerts();
 
-        printf("Done!");
+        printf(" Done!");
         ltimer.EndGlobal();
         ltimer.PrintAll();
     }
@@ -663,7 +731,8 @@ bool TopoMS::msc() {
     // ---------------------------------------------------------------------
     // restrict the discrete gradient based on numerical integration
     // ---------------------------------------------------------------------
-    {
+    if (this->m_fieldtype == FT_CHG) {
+
         MSC::ThreadedTimer ltimer(1);
         ltimer.StartGlobal();
 
@@ -676,20 +745,19 @@ bool TopoMS::msc() {
         edgemap->GetOutputLabels()->OutputToFile("boundary_labels.raw");
         edgemap->OutputEdgesToFile("surfin.raw");
 #endif
-
         m_tgrid->set_restriction (edgemap->GetOutputLabels ());
 
-        printf("Done!");
+        printf(" Done!");
         ltimer.EndGlobal();
         ltimer.PrintAll();
     }
-
-    const FLOATTYPE vacthreshold = m_config->vacuum_threshold * m_metadata.volume();
+    // else, no restriction
 
     // ---------------------------------------------------------------------
     // restrict the discrete gradient only in nonvacuum regions
     // ---------------------------------------------------------------------
-    {
+    if (this->m_fieldtype == FT_CHG) {
+
         MSC::ThreadedTimer ltimer(1);
         ltimer.StartGlobal();
 
@@ -725,18 +793,22 @@ bool TopoMS::msc() {
             }
         }
 
-        //GInt::CellTesterDefaultTrue* cellmasktester = new GInt::CellTesterDefaultTrue();
         MSC::CellTesterLaberInput* cellmasktester = new MSC::CellTesterLaberInput();
         cellmasktester->SetLabeling(cellmask);
         m_tgrid->SetTester(cellmasktester);
 
-        printf("Done!");
+        printf(" Done!");
         ltimer.EndGlobal();
         ltimer.PrintAll();
 
 #ifdef OUTPUT_DEBUG_FIELDS
         cellmask->OutputToIntFile("cellmask.raw");
 #endif
+    }
+    else {
+        // no restriction here
+        MSC::CellTesterDefaultTrue* cellmasktester = new MSC::CellTesterDefaultTrue();
+        m_tgrid->SetTester(cellmasktester);
     }
 
     // ---------------------------------------------------------------------
@@ -746,7 +818,8 @@ bool TopoMS::msc() {
     labeling->ClearAllGradient();
 
     MSC::RobinsLabelingAlgorithm<MSC::GridType, MSC::TopologicalExplicitDenseMeshFunction> *robin =
-            new MSC::RobinsLabelingAlgorithm<MSC::GridType,MSC::TopologicalExplicitDenseMeshFunction>(m_topofunc, m_tgrid, labeling);
+            new MSC::RobinsLabelingAlgorithm<MSC::GridType, MSC::TopologicalExplicitDenseMeshFunction>(m_topofunc, m_tgrid, labeling);
+
     robin->compute_output();
     robin->summarize();
 
@@ -764,10 +837,11 @@ bool TopoMS::msc() {
                 * topo_algs = new MSC::TopologicalGradientUsingAlgorithms<MSC::GridType, MSC::TopologicalExplicitDenseMeshFunction, MSC::DiscreteGradientLabeling>(m_topofunc, m_tgrid, labeling);
         topo_algs->setAscendingManifoldDimensions();
 
-        printf("Done!");
+        printf(" Done!");
         ltimer.EndGlobal();
         ltimer.PrintAll();
-#if 0
+
+#ifdef DEBUG
         ltimer.StartGlobal();
 
         printf(" -- Checking gradient consistency...");
@@ -810,7 +884,8 @@ bool TopoMS::msc() {
     // ---------------------------------------------------------------------
     // restrict cancellation to non-atom minima only
     // ---------------------------------------------------------------------
-    {
+    if (this->m_fieldtype == FT_CHG) {
+
         MSC::ThreadedTimer ltimer(1);
         ltimer.StartGlobal();
 
@@ -828,16 +903,12 @@ bool TopoMS::msc() {
             MSC::node<FLOATTYPE>& n = m_msc->getNode(i);
             if (n.dim != 0) continue;
 
-            if ( fabs( n.value ) < vacthreshold ) {
+            if ( fabs(n.value) < vacthreshold ) {
                 continue;
             }
 
-            MSC::Vec3l ncoords;
-            m_tgrid->cellid2Coords(n.cellindex, ncoords);
-
-            MSC::Vec3d ndcoords = ncoords;
-            ndcoords *= 0.5;
-
+            MSC::Vec3d ndcoords;
+            this->msc_cellid_to_gcoords(n.cellindex, ndcoords);
             kdtree_add(m_kdtree_minima, ndcoords[0], ndcoords[1], ndcoords[2], i);
             cnt++;
         }
@@ -899,13 +970,17 @@ bool TopoMS::msc() {
     // print total time
     // ---------------------------------------------------------------------
 
-    printf("\n =====>> Molecular Graph Extracted!");
+    printf("\n =====>> Topological Graph Extracted!");
     timer.EndGlobal ();
     timer.PrintAll ();
-    Utils::print_separator();
 
     // ---------------------------------------------------------------------
-    simplify_msc( persistence_val, filter_val );
+    if (this->m_fieldtype == FT_CHG) {
+        extract_mgraph( persistence_val, filter_val );
+    }
+    else {
+        extract_lpot_nbrhood_li( persistence_val, filter_val);
+    }
     return true;
 }
 
@@ -916,20 +991,22 @@ bool TopoMS::msc() {
   *   @param  fvalue is the persistence value
   *   @return void
   */
-void TopoMS::simplify_msc(FLOATTYPE pvalue, FLOATTYPE fvalue) {
+void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
+
+    assert(this->m_fieldtype == FT_CHG);
 
     persistence_val = pvalue;
     filter_val = fvalue;
 
     // ----------------------------------------------------------
-    printf("\n -- Extracting simplified topology (persistence = %f, filtered at %f)\n", persistence_val, filter_val);
+    Utils::print_separator();
+    printf("\n -- Extracting simplified molecular graph (persistence = %f, filtered at %f)\n", persistence_val, filter_val);
     m_msc->SetSelectPersAbs(persistence_val);
 
     MSC::ThreadedTimer timer(1);
     timer.StartGlobal();
 
-    this->m_paths.clear();
-    this->m_nodes.clear();
+    this->m_mscbonds.clear();
 
     // now do the selection to show 0-1 arcs
     MSC::MSCSelectorLivingNodes<MSC::MSCType> *s_nodes = new MSC::MSCSelectorLivingNodes<MSC::MSCType>(m_msc);
@@ -941,37 +1018,76 @@ void TopoMS::simplify_msc(FLOATTYPE pvalue, FLOATTYPE fvalue) {
     s_r1saddles->add_parent(s_1saddles);
 
     // here is how to actually extract arcs
-    MSC::StreamlineIntegratorType *sintegrator = new MSC::StreamlineIntegratorType(m_grid, m_gridfunc, m_config->error_threshold, m_config->grad_threshold, m_config->numiter);
+    MSC::StreamlineIntegratorType *sintegrator = new MSC::StreamlineIntegratorType(m_grid, m_gridfunc, m_config->threshold_error, m_config->threshold_grad, m_config->numiter);
+
     MSC::TerminateNearExtrema *extremumtermination = new MSC::TerminateNearExtrema(m_integrator->GetExtrema(), m_grid);
     sintegrator->SetAdvectionChecker(extremumtermination);
 
     s_r1saddles->compute_output();
 
+    //printf(" i have %d saddles\n", s_r1saddles->output.size());
     // ----------------------------------------------------------
     // compute paths
+    size_t pfixes = 0;
     static const float eps = 0.000001;
     for (auto it = s_r1saddles->output.begin(); it != s_r1saddles->output.end(); it++) {
 
+        bool debug = false;
+
+        MSCBond bond (*it);
+
+        int sdim;
+        INDEX_TYPE scidx;
+        this->msc_get_node(bond.saddle, sdim, scidx, bond.scoords);
+
+        if (debug)
+            printf(" looking at saddle %d\n", *it);
+
         // iterate over arcs around the saddle
-        MSC::MSCType::SurroundingArcsIterator sit(m_msc);
+        MSC::MSCIteratorSurroundingArcs<MSC::MSCType> sit(m_msc);
         for (sit.begin(*it); sit.valid(); sit.advance()) {
 
             INT_TYPE arcid = sit.value();
             MSC::arc<FLOATTYPE>& arc = m_msc->getArc(arcid);
+
+            if (debug)
+                printf(" - got an arc (%d -> %d)\n", arc.lower, arc.upper);
 
             // only look at saddle-minimum arcs
             if (arc.upper != *it) {
                 continue;
             }
 
+            if (debug)
+                printf(" - use the arc (%d -> %d)\n", arc.lower, arc.upper);
+
             INDEX_TYPE lowercellid = m_msc->getNode(arc.lower).cellindex;       // combinatorial says this is where we should end up
             INDEX_TYPE uppercellid = m_msc->getNode(arc.upper).cellindex;       // combinatorial says this is where we should end up
 
             INDEX_TYPE lowervertid = m_tgrid->VertexNumberFromCellID(lowercellid);  // get vertex id in grid coordinates from combinatorial min from topological coordinates
 
+            if (debug){
+                printf(" - use the arc (%d %d %f -> %d %d %f)\n",
+                       arc.lower, lowercellid, m_topofunc->cellValue(lowercellid),
+                       arc.upper, uppercellid, m_topofunc->cellValue(uppercellid));
+            }
 
             // filtering
-            if (fabs(m_topofunc->cellValue(lowercellid)) <= filter_val || fabs(m_topofunc->cellValue(uppercellid)) <= filter_val){
+            if (fabs(m_topofunc->cellValue(lowercellid)) <= filter_val ||
+                fabs(m_topofunc->cellValue(uppercellid)) <= filter_val){
+                continue;
+            }
+
+            // 05/13/2018
+            // Harsh put in a failsafe here
+            // because, somehow, persistence simplification is not working properly
+            FLOATTYPE pval = fabs(m_topofunc->cellValue(uppercellid)-m_topofunc->cellValue(lowercellid));
+            if (pval < pvalue) {
+                pfixes ++;
+                continue;
+                printf(" should not find small persistence values: %f.. %d: %f, %d: %f\n",
+                          pval, arc.lower, m_topofunc->cellValue(lowercellid),
+                          arc.upper, m_topofunc->cellValue(uppercellid));
                 continue;
             }
 
@@ -980,14 +1096,11 @@ void TopoMS::simplify_msc(FLOATTYPE pvalue, FLOATTYPE fvalue) {
 
             std::vector<MSC::Vec3d> geom_numerical;                        // structure to hold numerical path
 
-            // now try integrating down starting from cominatorial geomery
+            // now try integrating down starting from combinatorial geomery
             for (size_t j = 0; j < geom_combinatorial.size(); j++) {
 
-                MSC::Vec3l c;
-                m_tgrid->cellid2Coords(geom_combinatorial[j], c);
-                MSC::Vec3d cf = c;
-                cf *= 0.5;
-
+                MSC::Vec3d cf;
+                this->msc_cellid_to_gcoords(geom_combinatorial[j], cf);
 
                 if (j > 0) {
 
@@ -1016,9 +1129,31 @@ void TopoMS::simplify_msc(FLOATTYPE pvalue, FLOATTYPE fvalue) {
                 }
             }
 
-            this->m_paths.push_back(geom_numerical);
-            this->m_nodes.push_back(arc.lower);
-            this->m_nodes.push_back(arc.upper);
+
+            // for this saddle, find the atom it bonds to!
+            // use the kdtree to find nearest atom to saddle's minima
+            {
+                int ndim;
+                INDEX_TYPE ncidx;
+                MSC::Vec3d coord;
+                this->msc_get_node(arc.lower, ndim, ncidx, coord);
+
+                double mpos[3] = {coord[0], coord[1], coord[2]};
+                int nearestAtomIdx = kdtree_query(m_kdtree_atoms, mpos);
+
+                bond.paths.push_back(geom_numerical);
+                bond.extrema.push_back(arc.lower);
+                bond.ecoords.push_back(coord);
+                bond.atomIds.push_back(nearestAtomIdx);
+
+                if (debug)
+                    printf(" - adding extrema %d and atom %d, path = %d\n", arc.lower, nearestAtomIdx, geom_numerical.size());
+            }
+        }
+
+        // Harsh: used this explicit condition for proper definition of molecular graph
+        if (bond.extrema.size() == 2){
+            this->m_mscbonds[*it] = bond;
         }
     }
 
@@ -1030,21 +1165,321 @@ void TopoMS::simplify_msc(FLOATTYPE pvalue, FLOATTYPE fvalue) {
         counts[node.dim]++;
     }
 
-    printf(" -- Simplified topology extracted! Found %d bond paths!", this->m_paths.size());
-    printf("    -- # crit pts = [%d, %d, %d, %d] = %d\n", counts[0], counts[1], counts[2], counts[3],
-                                                          counts[0] + counts[1] + counts[2] + counts[3] );
+    printf(" -- Simplified topology extracted! Found %d bonds!", this->m_mscbonds.size());
+
+    timer.EndGlobal ();
+    timer.PrintAll ();
+    if (pfixes > 0)
+        printf("   -- WARNING: explicitely filtered %d connections for persistence %f\n", pfixes, pvalue);
+    printf("   -- # crit pts = [%d, %d, %d, %d] = %d\n", counts[0], counts[1], counts[2], counts[3],
+                                                         counts[0] + counts[1] + counts[2] + counts[3] );
+
+    const size_t gdims[3] = {this->m_metadata.m_grid_dims[0],this->m_metadata.m_grid_dims[1],this->m_metadata.m_grid_dims[2]};
+
+    Utils::print_separator();
+    printf("\n -- Parameterizing MSC bonds...");
+    fflush(stdout);
+    for(auto iter = this->m_mscbonds.begin(); iter != this->m_mscbonds.end(); iter++)
+        iter->second.parameterize(gdims);
+    printf(" Done!\n");
+
+    // use vtk to compute cross sectional areas for Bader regions
+    this->compute_baderAreas();
+
+    Utils::print_separator();
+}
+
+void TopoMS::extract_lpot_nbrhood(FLOATTYPE pvalue, FLOATTYPE fvalue, float gpos[], unsigned cp_idx) {
+
+    assert(this->m_fieldtype == FT_POT);
+    assert(cp_idx == 0 || cp_idx == 3);
+
+    if (cp_idx != 0 && cp_idx != 3) {
+        printf(" extract_lpot_nbrhood works only for cp_idx = 0 or cp_idx = 3\n");
+        return;
+    }
+
+    bool debug = false;
+
+    persistence_val = pvalue;
+    filter_val = fvalue;
+
+    // --------------------------------------------------------------------------------
+    // if we want to look at the maximum, we are interested in 3--2 arcs
+    // otherwise, for minimum, we find 0-1 arcs!
+    // the arcs we are interested in, are therefore, 3--2 arcs (max--2saddle)
+    unsigned arc_idx = (cp_idx == 3) ? 2 : 0;
+
+    // if we negated the function, we need to negate the indices as well
+    if (this->m_negated) {
+        cp_idx = 3-cp_idx;
+        arc_idx = 2-arc_idx;
+    }
+
+    // --------------------------------------------------------------------------------
+    printf("\n -- Extracting simplified potential neighborhood of a cp (%d) with outgoing arcs (%d--%d) lithium (persistence = %f, filtered at %f)\n",
+           cp_idx, arc_idx, arc_idx+1, persistence_val, filter_val);
+    m_msc->SetSelectPersAbs(persistence_val);
+
+    MSC::ThreadedTimer timer(1);
+    timer.StartGlobal();
+
+    this->m_mscbonds.clear();
+
+    // select all nodes living at current level of simplification
+    MSC::MSCSelectorLivingNodes<MSC::MSCType> *s_nodes = new MSC::MSCSelectorLivingNodes<MSC::MSCType>(m_msc);
+    s_nodes->compute_output();
+    if(debug)
+        printf(" have %d living nodes!\n", s_nodes->output.size());
+
+    // --------------------------------------------------------------------------------
+
+    // select all critical points of required type
+    MSC::MSCSelectorNodeIndex<MSC::MSCType> *s_cpIdx = new MSC::MSCSelectorNodeIndex<MSC::MSCType>(m_msc, cp_idx);
+    s_cpIdx->add_parent(s_nodes);
+    s_cpIdx->compute_output();
+    if(debug)
+        printf(" have %d nodes of indx %d!\n", s_cpIdx->output.size(), cp_idx);
+
+    // select the nearest critical point to lithium
+    MSC::MSCSelectorNearestNode<MSC::MSCType> *s_cpAtom = new MSC::MSCSelectorNearestNode<MSC::MSCType>(m_msc, MSC::Vec3d(gpos[0], gpos[1], gpos[2]));
+    s_cpAtom->add_parent(s_cpIdx);
+    s_cpAtom->compute_output();
+    if(debug)
+        printf(" have %d nearest nodes!\n", s_cpAtom->output.size());
+
+    // should return a single node
+    assert(s_cpAtom->output.size() == 1);
+
+    INDEX_TYPE nearest_node = *s_cpAtom->output.begin();
+    int sdim;
+    INDEX_TYPE scidx;
+    MSC::Vec3d ncoords;
+    this->msc_get_node(nearest_node, sdim, scidx, ncoords);
+
+    if (this->m_negated)
+        sdim = 3-sdim;
+
+    if(debug)
+        printf(" nearest node is %d, dim = %d, cidx = %d, pos = (%f %f %f)\n", nearest_node, sdim, scidx, ncoords[0], ncoords[1], ncoords[2]);
+    assert(sdim == cp_idx);
+
+    // collect all arcs and nodes within 2 nbrhood
+    // (atom -- sad) and (sad -- XX)
+    std::set<INDEX_TYPE> arcs;
+
+    // collect Li-saddle arcs
+    MSC::MSCSelectorIncidentArcs2<MSC::MSCType> *s_arcs01 = new MSC::MSCSelectorIncidentArcs2<MSC::MSCType>(m_msc, arc_idx);
+    s_arcs01->add_parent(s_cpAtom);
+    s_arcs01->compute_output();
+    if(debug)
+        printf(" have %d incident arcs of type (%d -- %d)!\n", s_arcs01->output.size(), arc_idx, 1+arc_idx);
+
+#if 0
+    // collect higher critical point of all these arcs (i.e., all 1-saddles connected to the initial minimum)
+    MSC::MSCSelectorIncidentNodes<MSC::MSCType> *s_nodes01 = new MSC::MSCSelectorIncidentNodes<MSC::MSCType>(m_msc, 1);
+    s_nodes01->add_parent(s_arcs01);
+    s_nodes01->compute_output();
+    printf(" have %d incident nodes!\n", s_nodes01->output.size());
+
+    // collect 1-0 arcs
+    MSC::MSCSelectorIncidentArcs<MSC::MSCType> *s_arcs12 = new MSC::MSCSelectorIncidentArcs<MSC::MSCType>(m_msc, 0);
+    s_arcs12->add_parent(s_nodes01);
+    s_arcs12->compute_output();
+    printf(" have %d incident arcs!\n", s_arcs12->output.size());
+
+    //MSC::MSCSelectorIncidentNodes<MSC::MSCType> *s_nodes12 = new MSC::MSCSelectorIncidentNodes<MSC::MSCType>(m_msc);
+    //s_nodes12->add_parent(s_arcs12);
+    //s_nodes12->compute_output();
+    //printf(" have %d incident nodes!\n", s_nodes12->output.size());
+
+#endif
+    // collect all of these arcs in a single set
+    for(auto it = s_arcs01->output.begin(); it != s_arcs01->output.end(); it++) {     arcs.insert(*it);     }
+    //for(auto it = s_arcs12->output.begin(); it != s_arcs12->output.end(); it++) {     arcs.insert(*it);     }
+    //for(auto iter = s_nodes01->output.begin(); iter != s_nodes01->output.end(); iter++) {   nodes.insert(*iter);    }
+    //for(auto iter = s_nodes12->output.begin(); iter != s_nodes12->output.end(); iter++) {   nodes.insert(*iter);    }
+
+    // now, for create bond paths
+    for(auto it = arcs.begin(); it != arcs.end(); it++) {
+
+        INT_TYPE arcid = *it;
+        MSC::arc<FLOATTYPE>& arc = m_msc->getArc(arcid);
+        //printf(" found an arc: (%d %d) %d %f\n", arc.lower, arc.upper, arc.dim, arc.persistence);
+
+        INDEX_TYPE lowercellid = m_msc->getNode(arc.lower).cellindex;       // combinatorial says this is where we should end up
+        INDEX_TYPE uppercellid = m_msc->getNode(arc.upper).cellindex;       // combinatorial says this is where we should end up
+        if (fabs(m_topofunc->cellValue(lowercellid)) <= filter_val || fabs(m_topofunc->cellValue(uppercellid)) <= filter_val){
+            continue;
+        }
+
+        if (this->m_fieldtype == FT_POT && arc.lower != nearest_node) {
+            printf(" incorrect arc: (%d %d) %d %f\n", arc.lower, arc.upper, arc.dim, arc.persistence);
+        }
+
+        vector<INDEX_TYPE> geom_combinatorial;
+        m_msc->fillArcGeometry(arcid, geom_combinatorial);              // combinatorial arc geometry
+
+        std::vector<MSC::Vec3d> points;
+        points.resize(geom_combinatorial.size());
+        for(int k = 0; k < geom_combinatorial.size(); k++) {
+            this->msc_cellid_to_gcoords(geom_combinatorial[k], points[k]);
+        }
+
+        // i am using this datastructure temporarily
+        // these do not represent bonds, but for now, i am using them to avoid writing new ones
+        // create temp bonds
+        MSCBond bond (arc.lower);   // check!
+        bond.scoords = ncoords;
+        bond.extrema.push_back(arc.lower);
+        bond.extrema.push_back(arc.upper);
+        bond.paths.push_back(points);
+        this->m_mscbonds[this->m_mscbonds.size()] = bond;
+    }
+
     timer.EndGlobal ();
     timer.PrintAll ();
     Utils::print_separator();
 }
 
+void TopoMS::extract_lpot_nbrhood_li(FLOATTYPE pvalue, FLOATTYPE fvalue) {
+
+/*
+    {   //OLDER tool
+        /* --------------------------------------------------------------------------------
+        // Potential field
+        // H and P are minima, all others are maxima (in original, non-negated field)
+        * /
+
+        MSC::MSCSelectorNodeIndex<MSC::MSCType> *s_cp0 = new MSC::MSCSelectorNodeIndex<MSC::MSCType>(m_msc, 0);
+        MSC::MSCSelectorNodeIndex<MSC::MSCType> *s_cp3 = new MSC::MSCSelectorNodeIndex<MSC::MSCType>(m_msc, 3);
+        s_cp0->add_parent(s_nodes);
+        s_cp3->add_parent(s_nodes);
+
+        double tpos[3];
+        for(int i = 0; i < this->m_atoms.size(); i++) {
+
+            m_atoms[i].print();
+            m_metadata.world_to_grid (m_atoms[i].m_pos, tpos);
+
+            MSC::MSCSelectorNearestNode<MSC::MSCType> *s_cpAtom = new MSC::MSCSelectorNearestNode<MSC::MSCType>(m_msc, MSC::Vec3d(tpos[0], tpos[1], tpos[2]));
+            s_cpAtom->add_parent(s_cp0);
+            s_cpAtom->add_parent(s_cp3);
+            s_cpAtom->compute_output();
+
+            assert(s_cpAtom->output.size() == 1);
+
+            INDEX_TYPE nearest_node = *s_cpAtom->output.begin();
+            int sdim;
+            INDEX_TYPE scidx;
+            MSC::Vec3d ncoords;
+            this->get_msc_node(nearest_node, sdim, scidx, ncoords);
+
+            if (this->m_negated)
+                sdim = 3-sdim;
+
+            printf(" nearest node to atom %d %s is %d, dim = %d\n", i+1, m_atoms[i].m_symbol.c_str(), nearest_node, sdim);
+        }
+    }
+*/
+    // --------------------------------------------------------------------------------
+    // code to analyze lithium's neighborhood
+
+    // Li should show up as a maximum (idx 3) in a potential field
+    // the arcs we are interested in, are therefore, 3--2 arcs (max--2saddle)
+    unsigned int cp_idx = 3;
+
+    float gpos[3];
+    // POT
+
+    if (this->m_fieldtype == FT_POT) {
+        unsigned atomidx = 637;
+        m_metadata.world_to_grid (m_atoms[atomidx].m_pos, gpos);
+        std::cout << " WARNING: picking up the element " << int(atomidx) << "'s position ("<<gpos[0]<<","<<gpos[1]<<","<<gpos[2]<<")!\n";
+        this->m_atoms[atomidx].print();
+    }
+    // sans-L
+    else {
+        gpos[0] = 82.7324;
+        gpos[1] = 188.419;
+        gpos[2] = 26.0935;
+        std::cout << " WARNING: picking up hardcoded position ("<<gpos[0]<<","<<gpos[1]<<","<<gpos[2]<<")!\n";
+    }
+
+    extract_lpot_nbrhood( pvalue, fvalue, gpos, cp_idx);
+}
 
 // -----------------------------------------------------------------------------------------
+// I/O functions
 // -----------------------------------------------------------------------------------------
+/**
+  *   @brief  Write value along arcs
+  */
+void TopoMS::write_msc_bond_stats(const std::string &filename) const {
+
+    printf(" - Writing %s...", filename.c_str());
+    fflush(stdout);
+
+    FILE *outfile = fopen(filename.c_str(), "w");
+    if(!outfile){
+        printf(" could not open file\n");
+        return;
+    }
+
+    // ---------------------------------------------------------------------
+    // upon computation, the integrated areas and function values are simply "sums"
+    // now, i need to convert them into physical units
+    // i am using the same conversion as I do in the bader analysis
+    // that is, treating each point on the slice as a full 3D voxel
+    // this is only an apporximation, since depending upon the orientation of the slice,
+    // this can be more or less accurate!
+
+    const size_t gdims[3] = {this->m_metadata.m_grid_dims[0],this->m_metadata.m_grid_dims[1],this->m_metadata.m_grid_dims[2]};
+    const size_t num_gridPts = m_metadata.grid_sz();
+
+    const FLOATTYPE vol_box = m_metadata.volume_box();
+    const FLOATTYPE vol_voxel = m_metadata.volume_voxel();
+
+    const FLOATTYPE file_to_ae = m_metadata.volume_file2Angs() * m_metadata.charge_file2electrons();
+    const FLOATTYPE chgDens_fileUnit2e = (this->m_inputtype == IT_CUBE ? vol_box * file_to_ae : 1.0) / (FLOATTYPE) num_gridPts;
+
+
+    size_t scnt = 0;
+    for(auto iter = this->m_mscbonds.begin(); iter != this->m_mscbonds.end(); iter++) {
+
+        const MSCBond &bond = iter->second;
+
+        if(!bond.check2())
+            continue;
+
+        float wpos[3];
+        float gpos[3] = {bond.scoords[0],bond.scoords[1],bond.scoords[2]};
+        m_metadata.grid_to_world(gpos, wpos);
+
+        fprintf(outfile, "\nbond_critical_point [id = %d] at (%f %f %f)\n", ++scnt, wpos[0], wpos[1], wpos[2]);
+
+        for(unsigned k = 0; k < bond.atomIds.size(); k++) {
+            const size_t &a = bond.atomIds[k];
+            fprintf(outfile, "   atom [id = %d] %s (%f %f %f)\n", a, m_atoms[a-1].m_symbol.c_str(),
+                        m_atoms[a-1].m_pos[0], m_atoms[a-1].m_pos[1], m_atoms[a-1].m_pos[2]);
+        }
+
+        fprintf(outfile, "   iarea %f, ichg %f\n", vol_voxel*bond.iarea, chgDens_fileUnit2e*bond.ichg);
+
+        std::vector<std::pair<float, float>> vals;
+        bond.study_value(this->m_func, gdims, vals);
+
+        for(unsigned k = 0; k < vals.size(); k++)
+            fprintf(outfile, "% 08.5f, %.6E\n", vals[k].first, chgDens_fileUnit2e*(this->m_negated ? -1.0*vals[k].second : vals[k].second));
+    }
+
+    fclose(outfile);
+    printf(" Done!\n");
+}
+
 /**
   *   @brief  Write bader charges per atom
   */
-
 void TopoMS::write_bader_atoms2chgvol(const std::string &filename) const {
     printf(" - Writing %s...", filename.c_str());
     fflush(stdout);
@@ -1054,8 +1489,7 @@ void TopoMS::write_bader_atoms2chgvol(const std::string &filename) const {
         printf(" could not open file\n");
         return;
     }
-    fprintf(outfile, " %4s %11s %11s %11s %11s %13s\n",
-                        "#", "X", "Y", "Z", "CHARGE", "VOLUME");
+    fprintf(outfile, " %4s %11s %11s %11s %11s %13s\n", "#", "X", "Y", "Z", "CHARGE", "VOLUME");
     fprintf(outfile, "------------------------------------------------------------------------------\n");
 
     for(int i = 0; i < m_atoms.size (); i++){
@@ -1078,9 +1512,7 @@ void TopoMS::write_bader_atoms2chgvol(const std::string &filename) const {
 /**
   *   @brief  Write bader charges per maximum
   */
-
 void TopoMS::write_bader_max2chgvol(const std::string &filename, bool filter_small) const {
-#if 0
     printf(" - Writing %s...", filename.c_str());
     fflush(stdout);
 
@@ -1090,268 +1522,29 @@ void TopoMS::write_bader_max2chgvol(const std::string &filename, bool filter_sma
         return;
     }
 
-    fprintf(outfile, " %4s %11s %11s %11s %13s %8s\n",
-                        "#", "X", "Y", "Z", "CHARGE", "ATOM");
+    fprintf(outfile, " %4s %11s %11s %11s %13s %8s\n", "#", "X", "Y", "Z", "CHARGE", "ATOM");
     fprintf(outfile, "---------------------------------------------------------------------\n");
 
-    int c = 0;
-    for(int i = 0; i < minima.size (); i++){
+    const std::vector<INDEX_TYPE> &extrema = this->bader_get_extrema();
 
-        if (filter_small && chg_extrema[i] < powf(10, -6))
+    int c = 0;
+    for(size_t i = 0; i < extrema.size (); i++){
+
+        if (filter_small && chg_extrema[i] < 0.000001)
             continue;
 
-        int maxCellIdx = minima.at(i);
+        INDEX_TYPE maxCellIdx = extrema.at(i);
 
-        double xyzIdx[3];
-        m_metadata.idx_to_grid(maxCellIdx, xyzIdx);
+        float worldPos[3], gridPos[3];
 
-        Vec3f maxPos;
-        for(int d = 0; d < 3; d++)
-            maxPos[d] = m_metadata.grid_to_world ( xyzIdx[d], d );
-
+        m_metadata.idx_to_grid(maxCellIdx, gridPos);
+        m_metadata.grid_to_world(gridPos, worldPos);
 
         fprintf(outfile, " %4d %11.7f %11.7f %11.7f %13.7f %8d\n",
-                ++c, maxPos[0], maxPos[1], maxPos[2],
-                chg_extrema[i], extrema2atoms.at (i));
+                ++c, worldPos[0], worldPos[1], worldPos[2],
+                chg_extrema[i], extrema2atoms.at(i));
     }
     fprintf(outfile, "---------------------------------------------------------------------\n");
     fclose(outfile);
     printf(" Done!\n");
-#endif
-}
-
-
-// -----------------------------------------------------------------------------------------
-// -----------------------------------------------------------------------------------------
-// vtk headers
-#ifdef USE_VTK
-    #include <vtkSmartPointer.h>
-    #include <vtkIntArray.h>
-    #include <vtkFloatArray.h>
-    #include <vtkPoints.h>
-    #include <vtkVertex.h>
-    #include <vtkPolyLine.h>
-    #include <vtkCellArray.h>
-    #include <vtkPointData.h>
-    #include <vtkCellData.h>
-    #include <vtkFieldData.h>
-    #include <vtkPolyData.h>
-    #include <vtkImageData.h>
-    #include <vtkXMLPolyDataWriter.h>
-    #include <vtkXMLImageDataWriter.h>
-#endif
-
-/**
-  *   @brief  Write bader maximum labels as volumes (VTK file)
-  */
-void TopoMS::write_bader_max2vol(const string &filename) const {
-
-#ifndef USE_VTK
-    printf("TopoMS::write_bader_max2vol. VTK not available. Writing as raw file instead.\n");
-
-    FILE* fout = fopen(filename.c_str(), "wb");
-    fwrite(labels_extrema.data(), sizeof(int), labels_extrema.size(), fout);
-    fclose(fout);
-#else
-
-    printf(" - Writing %s...", filename.c_str());
-    fflush(stdout);
-
-    vtkSmartPointer<vtkImageData> imageData = vtkSmartPointer<vtkImageData>::New();
-
-    imageData->SetOrigin(0.0, 0.0, 0.0);
-    imageData->SetSpacing( m_metadata.m_lattice.v[0][0] / float(m_metadata.m_grid_dims[0]-1),
-                           m_metadata.m_lattice.v[1][1] / float(m_metadata.m_grid_dims[1]-1),
-                           m_metadata.m_lattice.v[2][2] / float(m_metadata.m_grid_dims[2]-1)
-                         );
-    imageData->SetDimensions( m_metadata.m_grid_dims[0], m_metadata.m_grid_dims[1], m_metadata.m_grid_dims[2] );
-    imageData->AllocateScalars(VTK_INT, 1);
-    imageData->GetPointData()->GetScalars()->SetName("max_labeling");
-
-    // Fill every entry of the image data with "2.0"
-    for (size_t z = 0; z < m_metadata.m_grid_dims[2]; z++) {
-    for (size_t y = 0; y < m_metadata.m_grid_dims[1]; y++) {
-    for (size_t x = 0; x < m_metadata.m_grid_dims[0]; x++) {
-
-        int* pixel = static_cast<int*>(imageData->GetScalarPointer(x,y,z));
-        pixel[0] = labels_extrema[ m_metadata.grid_to_idx(x,y,z) ];
-    }
-    }
-    }
-
-    vtkSmartPointer<vtkXMLImageDataWriter> writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
-    writer->SetFileName(filename.c_str());
-    writer->SetInputData(imageData);
-    writer->Write();
-    printf(" Done!\n");
-#endif
-}
-
-/**
-  *   @brief  Write bader atom labels as volumes (VTK file)
-  */
-void TopoMS::write_bader_atoms2vol(const string &filename) const {
-
-#ifndef USE_VTK
-    printf("TopoMS::write_bader_atoms2vol. VTK not available. Writing as raw file instead.\n");
-
-    FILE* fout = fopen(filename.c_str(), "wb");
-    fwrite(labels_atoms.data(), sizeof(int), labels_atoms.size(), fout);
-    fclose(fout);
-#else
-    printf(" - Writing %s...", filename.c_str());
-    fflush(stdout);
-
-    vtkSmartPointer<vtkImageData> imageData = vtkSmartPointer<vtkImageData>::New();
-
-    // TODO: for non-cube lattice, need to handle this
-    imageData->SetOrigin(0.0, 0.0, 0.0);
-    imageData->SetSpacing( m_metadata.m_lattice.v[0][0] / float(m_metadata.m_grid_dims[0]-1),
-                           m_metadata.m_lattice.v[1][1] / float(m_metadata.m_grid_dims[1]-1),
-                           m_metadata.m_lattice.v[2][2] / float(m_metadata.m_grid_dims[2]-1)
-                         );
-    imageData->SetDimensions( m_metadata.m_grid_dims[0], m_metadata.m_grid_dims[1], m_metadata.m_grid_dims[2] );
-    imageData->AllocateScalars(VTK_INT, 1);
-    imageData->GetPointData()->GetScalars()->SetName("atom_labeling");
-
-    // Fill every entry of the image data with "2.0"
-    for (size_t z = 0; z < m_metadata.m_grid_dims[2]; z++) {
-    for (size_t y = 0; y < m_metadata.m_grid_dims[1]; y++) {
-    for (size_t x = 0; x < m_metadata.m_grid_dims[0]; x++) {
-
-        int* pixel = static_cast<int*>(imageData->GetScalarPointer(x,y,z));
-        pixel[0] = labels_atoms[ m_metadata.grid_to_idx(x,y,z) ];
-    }
-    }
-    }
-
-    vtkSmartPointer<vtkXMLImageDataWriter> writer = vtkSmartPointer<vtkXMLImageDataWriter>::New();
-    writer->SetFileName(filename.c_str());
-    writer->SetInputData(imageData);
-    writer->Write();
-    printf(" Done!\n");
-#endif
-}
-
-/**
-  *   @brief  Write molecular graph (VTK file)
-  */
-void TopoMS::write_mgraph(const std::string &filename) const {
-
-#ifndef USE_VTK
-    printf("TopoMS::write_mgraph. VTK not available\n");
-#else
-
-    printf(" - Writing Molecular Graph to %s...", filename.c_str());
-    fflush(stdout);
-
-    static const float periodic_cutoff = 0.3*this->get_gridDims()[0];
-    static const float eps = 0.000001;
-
-    // ------------------------------------------------------------------------------
-    vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
-    vtkSmartPointer<vtkCellArray> lines = vtkSmartPointer<vtkCellArray>::New();
-    vtkSmartPointer<vtkCellArray> critPts = vtkSmartPointer<vtkCellArray>::New();
-
-    vtkSmartPointer<vtkIntArray> pDims = vtkSmartPointer<vtkIntArray>::New();
-    pDims->SetName("cp_dim");
-    pDims->SetNumberOfComponents(1);
-
-    /*vtkSmartPointer<vtkIntArray> cDims = vtkSmartPointer<vtkIntArray>::New();
-    cDims->SetName("cell_dims");
-    cDims->SetNumberOfComponents(1);*/
-
-    // ------------------------------------------------------------------------------
-    // Create a cell array to store the critical points
-    for(size_t i = 0; i < this->m_nodes.size(); i++) {
-
-        int ndim;
-        INDEX_TYPE ncidx;
-        MSC::Vec3l coord;
-
-        this->get_msc_node(m_nodes[i], ndim, ncidx, coord);
-
-        // get_msc_node returns MSC grid coordinates (twice the actual value)
-        float gcoord[3] = {0.5*coord[0], 0.5*coord[1], 0.5*coord[2]};
-        float wcoord[3] = {0,0,0};
-        this->m_metadata.grid_to_world(gcoord, wcoord);
-        points->InsertNextPoint(wcoord[0], wcoord[1], wcoord[2]);
-
-        vtkSmartPointer<vtkVertex> cPnt = vtkSmartPointer<vtkVertex>::New();
-        cPnt->GetPointIds()->InsertNextId(points->GetNumberOfPoints()-1);
-        critPts->InsertNextCell(cPnt);
-        pDims->InsertNextValue( i%2 == 0 ? 3 : 2 );
-        //cDims->InsertNextValue( i%2 == 0 ? 3 : 2 );
-    }
-
-    // ------------------------------------------------------------------------------
-    // Create a cell array to store the lines in and add the lines to it
-    for(size_t i = 0; i < this->m_paths.size(); i++) {
-
-        const std::vector<MSC::Vec3d> &path = this->m_paths[i];
-
-        vtkSmartPointer<vtkPolyLine> polyLine = vtkSmartPointer<vtkPolyLine>::New();
-        for(unsigned int pidx = 0; pidx < path.size(); pidx++) {
-
-            if (pidx > 0) {
-
-                double disp = (path[pidx] - path[pidx-1]).Mag();
-
-                if (disp < eps){
-                    continue;
-                }
-
-                if (disp > periodic_cutoff) {
-                    lines->InsertNextCell(polyLine);
-                    //cDims->InsertNextValue(6);
-                    polyLine = vtkSmartPointer<vtkPolyLine>::New();
-                }
-            }
-
-            float gcoord[3] = {path[pidx][0], path[pidx][1], path[pidx][2]};
-            float wcoord[3];
-            this->m_metadata.grid_to_world(gcoord, wcoord);
-            points->InsertNextPoint(wcoord[0], wcoord[1], wcoord[2]);
-
-            pDims->InsertNextValue(6);
-            polyLine->GetPointIds()->InsertNextId(points->GetNumberOfPoints()-1);
-        }
-
-        lines->InsertNextCell(polyLine);
-        //cDims->InsertNextValue(6);
-    }
-
-    // -----------------------------------------------------------------------------
-    // add persistence and filtering value to field data
-    vtkSmartPointer<vtkFloatArray> pValue = vtkSmartPointer<vtkFloatArray>::New();
-    pValue->SetNumberOfComponents(1);
-    pValue->SetName("persistence");
-    pValue->InsertNextValue( this->get_persistence() );
-
-    vtkSmartPointer<vtkFloatArray> fValue = vtkSmartPointer<vtkFloatArray>::New();
-    fValue->SetNumberOfComponents(1);
-    fValue->SetName("filter");
-    fValue->InsertNextValue( this->get_filterval() );
-
-    // ------------------------------------------------------------------------------
-    // Create a polydata to store everything in
-    vtkSmartPointer<vtkPolyData> polyData = vtkSmartPointer<vtkPolyData>::New();
-
-    polyData->SetPoints(points);
-    polyData->SetLines(lines);
-    polyData->SetVerts(critPts);
-    polyData->GetPointData()->AddArray(pDims);
-    //polyData->GetCellData()->AddArray(cDims);
-    polyData->GetFieldData()->AddArray(pValue);
-    polyData->GetFieldData()->AddArray(fValue);
-
-    // ------------------------------------------------------------------------------
-    // Write the file
-    vtkSmartPointer<vtkXMLPolyDataWriter> writer = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-    writer->SetInputData(polyData);
-    writer->SetFileName(filename.c_str());
-    writer->Write();
-
-    printf(" Done!\n");
-#endif
 }

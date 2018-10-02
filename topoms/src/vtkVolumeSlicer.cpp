@@ -254,183 +254,198 @@ END OF TERMS AND CONDITIONS
 
 
 /**
- *  @file    TopoMS_Viewer.h
+ *  @file    vtkVolumeSlicer.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
- *  @date    10/01/2017
+ *  @date    05/12/2018
  *  @version 1.0
  *
- *  @brief This file provides the functionality for the 3D TopoMS viewer
+ *  @brief This file provides the functionality for slicing a 3D volume using vtk
  *
  *  @section DESCRIPTION
  *
- *  This file provides the functionality for the 3D TopoMS viewer
+ *  This file provides the functionality for slicing a 3D volume using vtk
  *
  */
 
-#ifndef _TOPOMS_VIEWER_
-#define _TOPOMS_VIEWER_
+#include <string>
+#include "vtkVolumeSlicer.h"
+#include "MultilinearInterpolator.h"
 
-#include <QKeyEvent>
-#include <QGradient>
+typedef unsigned int uint;
 
-#ifdef USE_GLEW
-#include <GL/glew.h>
+// vtk headers
+#ifdef USE_VTK
+
+#include <vtkSmartPointer.h>
+#include <vtkDataArray.h>
+#include <vtkDoubleArray.h>
+#include <vtkMatrix4x4.h>
+#include <vtkPoints.h>
+#include <vtkPointData.h>
+#include <vtkImageData.h>
+#include <vtkImageReslice.h>
+
+
+vtkImageData* vtkVolumeSlicer::slice() const {   return m_slice;    }
+vtkImageData* vtkVolumeSlicer::volume() const {  return m_volume;   }
+
+void vtkVolumeSlicer::matrix(double mat[16]) const {
+    for(uint j = 0; j < 4; j++)
+    for(uint i = 0; i < 4; i++)
+        mat[i*4+j] = m_matrix->GetElement(j,i);
+}
+
+void vtkVolumeSlicer::set_volume(vtkImageData *volume, bool periodic=true) {
+    m_volume = volume;
+    m_periodic = periodic;
+}
+
+void vtkVolumeSlicer::set_orientation(double o[3], double nx[3], double ny[3], double nz[3]) {
+
+    // set up the slicing matrix for vtk
+    if (m_matrix == nullptr)
+        m_matrix = vtkMatrix4x4::New();
+
+    //#Set inital state of matrix to identity
+    m_matrix->Identity();
+
+    //#x axis column
+    m_matrix->SetElement(0, 0, nx[0]);
+    m_matrix->SetElement(1, 0, nx[1]);
+    m_matrix->SetElement(2, 0, nx[2]);
+    m_matrix->SetElement(3, 0, 0.0);
+
+    //#y axis column
+    m_matrix->SetElement(0, 1, ny[0]);
+    m_matrix->SetElement(1, 1, ny[1]);
+    m_matrix->SetElement(2, 1, ny[2]);
+    m_matrix->SetElement(3, 1, 0.0);
+
+    //#z axis column
+    m_matrix->SetElement(0, 2, nz[0]);
+    m_matrix->SetElement(1, 2, nz[1]);
+    m_matrix->SetElement(2, 2, nz[2]);
+    m_matrix->SetElement(3, 2, 0.0);
+
+    //#origin column
+    m_matrix->SetElement(0, 3, o[0]);
+    m_matrix->SetElement(1, 3, o[1]);
+    m_matrix->SetElement(2, 3, o[2]);
+    m_matrix->SetElement(3, 3, 1.0);
+}
+
+void vtkVolumeSlicer::transform(const double in[3], double out[3]) const {
+
+    double hin[4], hout[4];
+    for(unsigned d = 0; d < 3; d++) {
+        hin[d] = in[d];
+    }
+    hin[3] = 1;
+
+    m_matrix->MultiplyPoint(hin, hout);
+
+    for(unsigned d = 0; d < 3; d++) {
+        out[d] = hout[d];
+    }
+}
+
+vtkImageData* vtkVolumeSlicer::compute() {
+
+    vtkSmartPointer<vtkImageReslice> vtkSlicer = vtkSmartPointer<vtkImageReslice>::New();
+    vtkSlicer->SetOutputDimensionality(2);
+    vtkSlicer->SetTransformInputSampling(1);
+
+    vtkSlicer->SetAutoCropOutput(true);
+
+    if (m_volume->GetPointData()->GetScalars()->GetDataType() == VTK_INT) {
+        vtkSlicer->SetInterpolationModeToNearestNeighbor();
+    }
+    else {
+        vtkSlicer->SetInterpolationModeToCubic();
+    }
+
+    vtkSlicer->SetResliceAxes(m_matrix);
+    vtkSlicer->SetInputData(m_volume);
+    vtkSlicer->Update();
+
+    if (m_slice != nullptr)
+        m_slice->Delete();
+
+    m_slice = vtkImageData::New();
+    m_slice->DeepCopy(vtkSlicer->GetOutput());
+
+    // handle points outside the domain
+    size_t n = m_slice->GetNumberOfPoints();
+    int *dims = m_volume->GetDimensions();
+
+    double pnt[3], pnt2[3];
+
+    for(size_t i = 0; i < n; i++) {
+
+        // transform the slice point to 3D point
+        m_slice->GetPoint(i, pnt);
+        this->transform(pnt, pnt2);
+
+        bool outsideDomain = pnt2[0] < 0 || pnt2[0] >= dims[0] ||
+                             pnt2[1] < 0 || pnt2[1] >= dims[1] ||
+                             pnt2[2] < 0 || pnt2[2] >= dims[2];
+
+        if (!outsideDomain)
+            continue;
+
+        // set outside points to nan
+        if (!m_periodic) {
+            m_slice->GetPointData()->GetScalars()->SetComponent(i, 0, std::nan(""));
+        }
+        else {
+            // wrap periodic points and set the correct value
+            for(unsigned d = 0; d < 3; d++) {
+
+                if (pnt2[d] < 0)                 pnt2[d] += dims[d];
+                else if (pnt2[d] >= dims[d])     pnt2[d] -= dims[d];
+            }
+
+            double pval = MultilinearInterpolator::trilinear_interpolation(pnt2, m_volume);
+            m_slice->GetPointData()->GetScalars()->SetComponent(i, 0, pval);
+        }
+    }
+
+    //double vrng [2];
+    //m_volume->GetPointData()->GetScalars()->GetRange(vrng);
+
+    //double srng [2];
+    //m_slice->GetPointData()->GetScalars()->GetRange(srng);
+    //printf(" Slice computed! Vol range: [%f %f], Slice range: [%f %f]\n", vrng[0], vrng[1], srng[0], srng[1]);
+    return m_slice;
+}
+
+
+
+#if 0
+void vtkVolumeSlicer::set_volume(const double *volume, const size_t dims[], bool periodic, bool negated) {
+
+    if (m_volume != nullptr){
+        m_volume->Delete();
+    }
+
+    m_periodic = periodic;
+    m_volume = vtkImageData::New();
+    m_volume->SetOrigin(0.0, 0.0, 0.0);
+    m_volume->SetSpacing(1.0,1.0,1.0);
+    m_volume->SetDimensions(dims[0], dims[1], dims[2]);
+
+    m_volume->AllocateScalars(VTK_DOUBLE, 1);           //TODO: double or float?
+    m_volume->GetPointData()->GetScalars()->SetName("function");
+
+    for (size_t z = 0; z < dims[2]; z++) {
+    for (size_t y = 0; y < dims[1]; y++) {
+    for (size_t x = 0; x < dims[0]; x++) {
+
+        double* pixel = static_cast<double*>(m_volume->GetScalarPointer(x,y,z));
+        const size_t idx = z*dims[0]*dims[1] + y*dims[0] + x;
+        pixel[0] = negated ? -1 * volume[idx] : volume[idx];
+    }}}
+}
 #endif
-
-#include <set>
-
-#include <QGLViewer/qglviewer.h>
-#include "vsvr.h"
-#include "Vec3.h"
-#include "Mat3.h"
-
-
-
-class TopoMSApp;
-class vtkImageData;
-class vtkDiscretizableColorTransferFunction;
-
-#define GLVERTEX3f(v) ( glVertex3f((GLfloat)v[0], (GLfloat)v[1], (GLfloat)v[2]) )
-#define GLCOLOR3f(v) ( glColor3f((GLfloat)v[0], (GLfloat)v[1], (GLfloat)v[2]) )
-#define GLCOLORqc(c) ( glColor3f((GLfloat)c.redF(), (GLfloat)c.greenF(), (GLfloat)c.blueF()) )
-
-/**
-  *  @brief This class provides the core functionality for the 3D TopoMS viewer
-  */
-class TopoMSViewer : public QGLViewer {
-
-    TopoMSApp* parentApp;
-
-    size_t grid_dims[3];
-    qglviewer::Vec bbox_min, bbox_max;
-    qglviewer::Vec lattice[3];
-
-    VSVR *vsvr;
-    vtkDiscretizableColorTransferFunction* m_vtkSliceTf;    // transfer function for slicing
-
-    GLuint sphereList;
-    qglviewer::Vec orig, dir, selectedPoint;
-
-    std::set<int> selectedNodes, selectedAtoms;
-    //int drawn_name;
-
-#ifdef USE_GLEW
-    bool GLSL_available;
-    bool GLEW_available;
-#endif
-
-public:
-
-    TopoMSViewer(QWidget *parent);
-
-    // to support QGLViewer 2.7.1
-    void updateGL(){  this->update(); }
-
-    void set_volrendFunction(float *f, int X, int Y, int Z) {
-        vsvr->tex_set_resolution(X, Y, Z);
-        vsvr->tex_set_extern(f);
-    }
-    void set_volrendTransferFunction(float *tfunc, size_t tfsize) {
-        vsvr->tf_set_size(tfsize);
-        vsvr->tf_set_extern(tfunc);
-    }
-    void set_volrendFunction(float *f) {
-        vsvr->tex_set_resolution(grid_dims[0], grid_dims[1], grid_dims[2]);
-        vsvr->tex_set_extern(f);
-    }
-
-    void set_sliceTransferFunction(float *tfunc, size_t tfsize);
-    void set_lattice(const Mat3<double> &lattice_mat, const Vec3<double> &origin, const Vec3<size_t> grid) {
-
-        for(uint8_t i = 0; i < 3; i++){
-            grid_dims[i] = grid[i];
-        }
-
-        for(uint i = 0; i < 3; i++){
-            lattice[i] = qglviewer::Vec(lattice_mat.v[i][0], lattice_mat.v[i][1], lattice_mat.v[i][2]);
-        }
-
-
-        bbox_min = qglviewer::Vec(origin[0], origin[1], origin[2]);
-        for(uint i = 0; i < 3; i++){
-            bbox_max[i] = std::max(lattice[0][i], lattice[1][i]);
-            bbox_max[i] = std::max(bbox_max[i], lattice[2][i]);
-            bbox_max[i] += bbox_min[i];
-        }
-
-        //std::cout << " bbox = " << bbox_max << std::endl;
-        set_bbox(bbox_min, bbox_max);
-    }
-
-    /*void set_dims(const size_t dims[]) {
-
-        for(int i = 0; i < 3; i++){
-            grid_dims[i] = dims[i];
-        }
-        bbox_min = qglviewer::Vec(0,0,0);
-        bbox_max = qglviewer::Vec(grid_dims[0], grid_dims[1], grid_dims[2]);
-        set_bbox(bbox_min, bbox_max);
-    }*/
-
-private:
-
-    void set_bbox(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max);
-
-public:
-    void printGLStatus();
-    void create_tubes();
-
-private:
-
-    void render_volume();
-    void draw_atoms(bool with_names);
-
-    void draw_extrema();
-
-    void draw_mnodes(bool with_names);
-    void draw_mpaths();
-
-    void draw_nodes(bool with_names);
-    void draw_arcs();
-
-    void draw_saddleSlice();
-    // -------------------------------------------------------
-    // drawing functions
-
-    void draw_sphere(float px, float py, float pz, QColor col, float radius = 1);
-    void draw_sphere(const qglviewer::Vec &pos, QColor col = Qt::black, float radius = 1);
-    void draw_sphere(const float* pos, QColor col = Qt::black, float radius = 1);
-
-    void draw_manipulatedFrame(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max);
-public:
-    void draw_vtiSlice(vtkImageData *vtiSlice) ;
-private:
-    // -------------------------------------------------------
-    // static functions to draw various primitives
-
-    static void draw_line(const float p[], const float q[]);
-    static void draw_line(const float p[], const float q[], QColor pcol, QColor qcol);
-    static void draw_linestrip(const std::vector<float*> &pos, uint idx_start, uint idx_end, uint idx_step);
-
-    static void draw_sphere(double R, double NumLatitudes, double NumLongitudes);
-    static void draw_bBox(const float a[], const float b[]);
-    static void draw_bBox(const qglviewer::Vec &a, const qglviewer::Vec &b);
-
-    static void draw_unitCell(const qglviewer::Vec &o, const qglviewer::Vec &vx, const qglviewer::Vec &vy, const qglviewer::Vec &vz,
-                              QColor cx = Qt::red, QColor cy = Qt::green, QColor cz = Qt::blue);
-
-    static void draw_bConvexHull(const std::vector<const float *> &corners);
-    static void draw_bConvexHull(const std::vector<std::vector<float> > &corners);
-
-protected slots:
-    virtual void init();
-
-    virtual void draw();
-    virtual void drawWithNames();
-
-    //virtual QString helpString() const;
-    virtual void postSelection(const QPoint& point);
-    virtual void keyPressEvent(QKeyEvent* event);
-};
 
 #endif

@@ -60,13 +60,16 @@ purposes.
 
 int main(int argc, char** argv) {
 
-    if(argc != 2){
-        printf(" Usage: %s <config_file>\n", argv[0]);
+    if(argc != 2 && argc != 3){
+        printf(" Usage: %s <config_file> [input_file]\n", argv[0]);
         return 1;
     }
 
+    std::string configfilename = argv[1];
+    std::string infilename = (argc == 2) ? "" : argv[2];
+
     TopoMS topoms;
-    bool success = topoms.load(argv[1]);
+    bool success = topoms.load(configfilename, infilename);
     if(!success) {
         return 1;
     }

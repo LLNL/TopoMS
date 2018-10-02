@@ -83,6 +83,7 @@ purposes.
 #include "MolecularSystem.h"
 #include "Material.h"
 #include "InputFormats.h"
+#include "MSCBond.h"
 
 /// -----------------------------------------------------------------------
 /// Forward declaration of the required components of MSC library
@@ -115,22 +116,22 @@ namespace MSC {
     template< class Advector, class Comparer>
     class NumericIntegratorExpandingRegionStopFiltered2;
 
-    template< int StepMultiplier>
+    template<int StepMultiplier>
     class AdaptiveEulerAdvector;
 
-    template< class Advector, class Comparer>
+    template<class Advector, class Comparer>
     class NumericIntegratorRegionStop;
 
-    template< class Advector, class Comparer>
+    template<class Advector, class Comparer>
     class NumericIntegratorExpandingRegionStop;
 
-    template< class Advector>
+    template<class Advector>
     class NumericStreamlineIntegrator;
 
-    template< class Comparer>
+    template<class Comparer>
     class IsolatedRegionRemover;
 
-    template< class Comparer>
+    template<class Comparer>
     class IsolatedRegionRemoverMasked;
 
     template<class MSCType>
@@ -150,13 +151,18 @@ namespace MSC {
 
     typedef IndexCompareLessThan Comparer;
     typedef TopologicalRegularMaskedRestrictedGrid GridType;
-
+    
     typedef MorseSmaleComplexBasic<FLOATTYPE, GridType, TopologicalExplicitDenseMeshFunction, DiscreteGradientLabeling> MSCType;
     typedef NumericIntegratorExpandingRegionStopFiltered2<AdaptiveEulerAdvector<-1>, Comparer> IntegratorType;
     typedef NumericIntegratorRegionStop<AdaptiveEulerAdvector<-1>, Comparer> IntegratorType2;
     typedef NumericStreamlineIntegrator<AdaptiveEulerAdvector<-1> > StreamlineIntegratorType;
     typedef IsolatedRegionRemoverMasked<Comparer> RegionRemoverType;
 }
+
+#ifdef USE_VTK
+    class vtkImageData;
+    class vtkVolumeSlicer;
+#endif
 
 /// -----------------------------------------------------------------------
 /// Forward declaration done!
@@ -174,6 +180,9 @@ private:
     std::string m_datadir;
     FLOATTYPE *m_func;
 
+#ifdef USE_VTK
+    vtkImageData *m_vtkFunction, *m_vtkVolLabeling;
+#endif
     // bader-related variables
     std::vector<FLOATTYPE> chg_atoms, vol_atoms;
     std::vector<FLOATTYPE> chg_extrema, vol_extrema;
@@ -191,133 +200,199 @@ private:
 
     MSC::IntegratorType* m_integrator;
     MSC::RegionRemoverType* m_integrator2;
+    MSC::DenseLabeling<int> *m_volumelabeling;
     MSC::MSCType* m_msc;
     MSC::kdtree* m_kdtree_minima;
     MSC::kdtree* m_kdtree_atoms;
 
-    float persistence_val;
-    float filter_val;
+    FLOATTYPE persistence_val;
+    FLOATTYPE filter_val;
 
+    FLOATTYPE vacthreshold_in_fileUnits;
+
+    // ----------------------------------------------------------------------
 public:
 
     // TODO: make this private
     enum INPUT_TYPE {IT_UNKNOWN = 0, IT_VASP = 1, IT_CUBE = 2};
+    enum FIELD_TYPE {FT_UNKNOWN = 0, FT_CHG = 1, FT_POT = 2};
+
     INPUT_TYPE m_inputtype;
+    FIELD_TYPE m_fieldtype;
 
     Config *m_config;
     MS::SystemInfo m_metadata;
     std::vector<Material> m_atoms;
 
-    std::vector<std::vector<MSC::Vec3d> > m_paths;
     bool m_negated;
-    std::vector<INT_TYPE> m_nodes;
+    bool slice_labels;
+
+#ifdef USE_VTK
+    vtkVolumeSlicer *m_slicer_function;
+    vtkVolumeSlicer *m_slicer_label;
+#endif
+
+    std::map<INT_TYPE, MSCBond> m_mscbonds;
 
     // ----------------------------------------------------------------------
-    // basic functions
-    TopoMS() : m_config(0), m_inputtype(IT_UNKNOWN), m_negated(false),
+    // initialization functions
+
+    TopoMS() : m_config(0), m_inputtype(IT_UNKNOWN), m_fieldtype(FT_UNKNOWN), m_negated(false),
                    m_grid(0), m_tgrid(0), m_func(0), m_gridfunc(0), m_topofunc(0),
                    m_integrator(0), m_integrator2(0), m_msc(0),
                    m_kdtree_minima(0), m_kdtree_atoms(0),
-                    persistence_val(1.0), filter_val(1.0) {
+                   persistence_val(1.0), filter_val(1.0),
+                   m_slicer_function(0), m_slicer_label(0), slice_labels(1) {
         std::cout << "\n TopoMS v1.0\n\n";
     }
 
-    bool load(const std::string &configfilename);
+    bool load(const std::string &configfilename, std::string datafile = "");
     bool init();
 
-    bool kdtree_add(MSC::kdtree* kt, double x, double y, double z, int data) const;
-    int kdtree_query(MSC::kdtree* kt, const double pos[3]) const;
+    // ----------------------------------------------------------------------
+    // basic interface
 
-    // main analysis
-    bool bader();
-    bool msc();
-    void simplify_msc(FLOATTYPE pvalue, FLOATTYPE fvalue);
-
-    // basic queries
     FLOATTYPE* get_func() {                     return m_func;              }
     const FLOATTYPE* get_func() const {         return m_func;              }
 
-    const size_t* get_gridDims() const {    return m_config->grid_dims; }
-    size_t get_gridSize() const {           return m_config->grid_dims[0]*m_config->grid_dims[1]*m_config->grid_dims[2];    }
+    size_t get_gridSize() const {               return m_metadata.grid_sz();    }
 
-    std::pair<FLOATTYPE, FLOATTYPE> get_frange() const {
+    FLOATTYPE get_persistence() const {         return persistence_val;    }
+    FLOATTYPE get_filterval() const {           return filter_val;         }
 
-        FLOATTYPE minval = *std::min_element(m_func, m_func+get_gridSize());
-        FLOATTYPE maxval = *std::max_element(m_func, m_func+get_gridSize());
+    FLOATTYPE set_persistence(float _) {        persistence_val = _;       }
+    FLOATTYPE set_filterval(float _)  {         filter_val = _;            }
 
-        return (this->m_negated) ? std::make_pair(-1*maxval, -1*minval) :
-                                   std::make_pair(minval, maxval);
-
-    }
-    FLOATTYPE get_fsum() const {
-        FLOATTYPE s = std::accumulate(m_func, m_func+get_gridSize(), 0.0);
-        return (this->m_negated) ? -1*s : s;
-    }
-    FLOATTYPE get_fint() const {
-        return get_fsum() / FLOATTYPE(get_gridSize());
-    }
-
-    float get_persistence() const {         return persistence_val;    }
-    float set_persistence(float _) {        persistence_val = _;   }
-
-    float get_filterval() const {           return filter_val;          }
-    float set_filterval(float _)  {         filter_val = _;          }
-
-    float pers_val2perc(float val) const {
+    FLOATTYPE pers_val2perc(FLOATTYPE val) const {
         static std::pair<FLOATTYPE, FLOATTYPE> vr = this->get_frange();
         return (100.0*val / (vr.second - vr.first));
     }
-    float pers_perc2val(float val) {
+    FLOATTYPE pers_perc2val(float val) {
         static std::pair<FLOATTYPE, FLOATTYPE> vr = this->get_frange();
         return (val/100.0 * (vr.second - vr.first) + vr.first);
     }
 
-    // query msc
-    const std::vector<long long> get_extrema() const;
-    void cellid2Coords(const INDEX_TYPE &cellIdx, MSC::Vec3l &ncoords) const;
+    float get_periodic_cutoff(bool world=false) const {
 
-    bool msc_available() const;
-    size_t get_msc_nnodes() const;
-    bool get_msc_isNodeAlive(size_t idx) const;
-    bool get_msc_isNodeFiltered(size_t idx) const;
-    bool get_msc_node(size_t idx, int &dim, INDEX_TYPE &cellIdx, MSC::Vec3l &ncoords) const;
+        float cut[3] = {m_metadata.m_grid_dims[0], m_metadata.m_grid_dims[1], m_metadata.m_grid_dims[2]};
+        if (world) {
+            float gcut[3] = {cut[0],cut[1],cut[2]};
+            m_metadata.grid_to_world(gcut, cut);
+        }
+        return 0.3*std::min(cut[0], std::min(cut[1], cut[2]));
+    }
 
-    void print_node(size_t idx) const;
+    // ----------------------------------------------------------------------
+    std::pair<FLOATTYPE, FLOATTYPE> get_frange() const {
+
+        const size_t sz = get_gridSize();
+        FLOATTYPE minval = *std::min_element(m_func, m_func+sz);
+        FLOATTYPE maxval = *std::max_element(m_func, m_func+sz);
+        return (this->m_negated) ? std::make_pair(-1*maxval, -1*minval) : std::make_pair(minval, maxval);
+    }
+
+    // ----------------------------------------------------------------------
+    // analysis interface
+    bool bader();
+    bool msc();
+
+    // ----------------------------------------------------------------------
+    // bader and msc analysis
+
+    void extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue);
+    void extract_lpot_nbrhood(FLOATTYPE pvalue, FLOATTYPE fvalue, float gpos[], unsigned cp_idx);
+    void extract_lpot_nbrhood_li(FLOATTYPE pvalue, FLOATTYPE fvalue);
+
+    void compute_baderAreas();
+
+    // ----------------------------------------------------------------------
+    // interface with bader analysis
+    // ----------------------------------------------------------------------
+    const std::vector<INDEX_TYPE>& bader_get_extrema() const;
+
+    int bader_get_atomLabeling(INDEX_TYPE vIdx) const;
+    int bader_get_atomLabeling(size_t x, size_t y, size_t) const;
+    int bader_get_atomLabeling(double pos[3]) const;
+
+
+    // ----------------------------------------------------------------------
+    // interface with the msc library
+    // ----------------------------------------------------------------------
+
+    bool msc_is_available() const;
+    size_t msc_get_nnodes() const;
+    size_t msc_get_narcs() const;
+
+    bool msc_is_nodeAlive(size_t idx) const;
+    bool msc_is_arcAlive(size_t idx) const;
+    bool msc_is_nodeFiltered(size_t idx) const;
+
+    int msc_get_nodeDim(size_t idx) const;
+    int msc_get_arcDim(size_t idx) const;
+
+    bool msc_get_node(size_t idx, int &dim, INDEX_TYPE &cellIdx, MSC::Vec3d &ncoords) const;
+    void msc_get_arcGeometry(size_t idx, std::vector<INDEX_TYPE> &arc_geom) const;
+
+    void msc_cellid_to_gcoords(const INDEX_TYPE &cellIdx, MSC::Vec3d &ncoords) const;
+    void msc_cellid_to_wcoords(const INDEX_TYPE &cellIdx, float wcoords[]) const;
+    void msc_gcoords_to_wcoords(const MSC::Vec3d &ncoords, float wcoords[]) const;
+    void msc_print_node(size_t idx) const;
+
+    void refresh_orthogonalSlice(int saddleNodeId, int param=0, int minp=-100, int maxp=100);
+
+private:
+    // ----------------------------------------------------------------------
+    // kd tree handling
+    // ----------------------------------------------------------------------
+    bool kdtree_add(MSC::kdtree* kt, double x, double y, double z, int data) const;
+    int kdtree_query(MSC::kdtree* kt, const double pos[3]) const;
+
+    // ----------------------------------------------------------------------
+    // vtk functionalities
+    // ----------------------------------------------------------------------
+
+#ifdef USE_VTK
+    vtkImageData *create_vtkImagedata(const std::string &fname) const;
+    vtkImageData* create_vtkImagedata(const double *volume, const std::string &fname) const;
+
+    static void compute_slice(const MSC::Vec3d &origin, const std::vector<MSC::Vec3d> &nbrs, vtkVolumeSlicer *slicer);
+
+    bool filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &atomids, bool overwrite = false) const;
+    std::pair<double, double> integrate_slice(const vtkVolumeSlicer *slicer, const double *func) const;
+#endif
 
     // ----------------------------------------------------------------------
     // I/O functions
+    // ----------------------------------------------------------------------
+
+    void write_labeling_vti(const std::string &filename, const std::string &fieldname, const std::vector<int> &labels) const;
+    void write_mgraph_vtp(const std::string &filename) const;
+
+    void write_bader_atoms2chgvol(const std::string &filename) const;
+    void write_bader_max2chgvol(const std::string &filename, bool filter_small = true) const;
+    void write_msc_bond_stats(const std::string &filename) const;
+
+public:
 
     void write_bader() const {
-        //write_bader_max2vol(m_datadir+"Maxima2Vol.vti");
-        //write_bader_max2chgvol(m_datadir+"Maxima2ChgVol.dat");
 
-        write_bader_atoms2vol(m_datadir+"Atoms2Vol.vti");
-        write_bader_atoms2chgvol(m_datadir+"Atoms2ChgVol.dat");
-
+        write_labeling_vti(m_config->infilename+"-Atoms2Vol.vti", "atom_labeling", this->labels_atoms);
+        write_bader_atoms2chgvol(m_config->infilename+"-Atoms2ChgVol.dat");
         return;
-
-        if (this->m_inputtype == IT_VASP) {
-            MS::VASP::write_CHGCAR<int>(m_datadir+"Atoms2Vol", this->m_metadata, this->m_atoms, labels_atoms.data());
-        }
+        if (this->m_inputtype == IT_VASP)
+            MS::VASP::write_CAR<int>(m_config->infilename+"-Atoms2Vol", this->m_metadata, this->m_atoms, labels_atoms.data());
     }
 
     void write_msc() const {
 
         char fpers[10];
         sprintf(fpers, "%.4f", get_persistence());
-        write_mgraph(m_datadir+"MolecularGraph_"+std::string(fpers)+".vtp");
+        write_mgraph_vtp(m_config->infilename+"-MolecularGraph_"+std::string(fpers)+".vtp");
+        write_msc_bond_stats(m_config->infilename+"-MolecularBondStats_"+std::string(fpers)+".txt");
     }
 
-private:
-
-    void write_bader_max2vol(const std::string &filename) const;
-    void write_bader_atoms2vol(const std::string &filename) const;
-    void write_bader_atoms2chgvol(const std::string &filename) const;
-    void write_bader_max2chgvol(const std::string &filename, bool filter_small = true) const;
-
-    void write_mgraph(const std::string &filename) const;
-
-    /// ----------------------------------------------------------------------
+    // ----------------------------------------------------------------------
+    // ----------------------------------------------------------------------
 };
 
 #endif

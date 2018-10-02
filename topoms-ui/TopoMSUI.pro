@@ -65,6 +65,109 @@ LIBS += \
 -lvtkIOXML-$$VTKVERSION \
 -lvtkIOLegacy-$$VTKVERSION
 
+LIBS += \
+-lvtkChartsCore-$$VTKVERSION                           -lvtkIOPLYPython27D-$$VTKVERSION \
+-lvtkChartsCorePython27D-$$VTKVERSION                  -lvtkIOParallel-$$VTKVERSION \
+-lvtkCommonColor-$$VTKVERSION                          -lvtkIOParallelPython27D-$$VTKVERSION \
+-lvtkCommonColorPython27D-$$VTKVERSION                 -lvtkIOParallelXML-$$VTKVERSION \
+-lvtkCommonComputationalGeometry-$$VTKVERSION          -lvtkIOParallelXMLPython27D-$$VTKVERSION \
+-lvtkCommonComputationalGeometryPython27D-$$VTKVERSION -lvtkIOSQL-$$VTKVERSION \
+-lvtkCommonCore-$$VTKVERSION                           -lvtkIOSQLPython27D-$$VTKVERSION \
+-lvtkCommonCorePython27D-$$VTKVERSION                  -lvtkIOTecplotTable-$$VTKVERSION \
+-lvtkCommonDataModel-$$VTKVERSION                      -lvtkIOTecplotTablePython27D-$$VTKVERSION \
+-lvtkCommonDataModelPython27D-$$VTKVERSION             -lvtkIOVideo-$$VTKVERSION \
+-lvtkCommonExecutionModel-$$VTKVERSION                 -lvtkIOVideoPython27D-$$VTKVERSION \
+-lvtkCommonExecutionModelPython27D-$$VTKVERSION        -lvtkIOXML-$$VTKVERSION \
+-lvtkCommonMath-$$VTKVERSION                           -lvtkIOXMLParser-$$VTKVERSION \
+-lvtkCommonMathPython27D-$$VTKVERSION                  -lvtkIOXMLParserPython27D-$$VTKVERSION \
+-lvtkCommonMisc-$$VTKVERSION                           -lvtkIOXMLPython27D-$$VTKVERSION \
+-lvtkCommonMiscPython27D-$$VTKVERSION                  -lvtkImagingColor-$$VTKVERSION \
+-lvtkCommonSystem-$$VTKVERSION                         -lvtkImagingColorPython27D-$$VTKVERSION \
+-lvtkCommonSystemPython27D-$$VTKVERSION                -lvtkImagingCore-$$VTKVERSION \
+-lvtkCommonTransforms-$$VTKVERSION                     -lvtkImagingCorePython27D-$$VTKVERSION \
+-lvtkCommonTransformsPython27D-$$VTKVERSION            -lvtkImagingFourier-$$VTKVERSION \
+-lvtkDICOMParser-$$VTKVERSION                          -lvtkImagingFourierPython27D-$$VTKVERSION \
+-lvtkDomainsChemistry-$$VTKVERSION                     -lvtkImagingGeneral-$$VTKVERSION \
+-lvtkDomainsChemistryOpenGL2-$$VTKVERSION              -lvtkImagingGeneralPython27D-$$VTKVERSION \
+-lvtkDomainsChemistryOpenGL2Python27D-$$VTKVERSION     -lvtkImagingHybrid-$$VTKVERSION \
+-lvtkDomainsChemistryPython27D-$$VTKVERSION            -lvtkImagingHybridPython27D-$$VTKVERSION \
+-lvtkFiltersAMR-$$VTKVERSION                           -lvtkImagingMath-$$VTKVERSION \
+-lvtkFiltersAMRPython27D-$$VTKVERSION                  -lvtkImagingMathPython27D-$$VTKVERSION \
+-lvtkFiltersCore-$$VTKVERSION                          -lvtkImagingMorphological-$$VTKVERSION \
+-lvtkFiltersCorePython27D-$$VTKVERSION                 -lvtkImagingMorphologicalPython27D-$$VTKVERSION \
+-lvtkFiltersExtraction-$$VTKVERSION                    -lvtkImagingSources-$$VTKVERSION \
+-lvtkFiltersExtractionPython27D-$$VTKVERSION           -lvtkImagingSourcesPython27D-$$VTKVERSION \
+-lvtkFiltersFlowPaths-$$VTKVERSION                     -lvtkImagingStatistics-$$VTKVERSION \
+-lvtkFiltersFlowPathsPython27D-$$VTKVERSION            -lvtkImagingStatisticsPython27D-$$VTKVERSION \
+-lvtkFiltersGeneral-$$VTKVERSION                       -lvtkImagingStencil-$$VTKVERSION \
+-lvtkFiltersGeneralPython27D-$$VTKVERSION              -lvtkImagingStencilPython27D-$$VTKVERSION \
+-lvtkFiltersGeneric-$$VTKVERSION                       -lvtkInfovisCore-$$VTKVERSION \
+-lvtkFiltersGenericPython27D-$$VTKVERSION              -lvtkInfovisCorePython27D-$$VTKVERSION \
+-lvtkFiltersGeometry-$$VTKVERSION                      -lvtkInfovisLayout-$$VTKVERSION \
+-lvtkFiltersGeometryPython27D-$$VTKVERSION             -lvtkInfovisLayoutPython27D-$$VTKVERSION \
+-lvtkFiltersHybrid-$$VTKVERSION                        -lvtkInteractionImage-$$VTKVERSION \
+-lvtkFiltersHybridPython27D-$$VTKVERSION               -lvtkInteractionImagePython27D-$$VTKVERSION \
+-lvtkFiltersHyperTree-$$VTKVERSION                     -lvtkInteractionStyle-$$VTKVERSION \
+-lvtkFiltersHyperTreePython27D-$$VTKVERSION            -lvtkInteractionStylePython27D-$$VTKVERSION \
+-lvtkFiltersImaging-$$VTKVERSION                       -lvtkInteractionWidgets-$$VTKVERSION \
+-lvtkFiltersImagingPython27D-$$VTKVERSION              -lvtkInteractionWidgetsPython27D-$$VTKVERSION \
+-lvtkFiltersModeling-$$VTKVERSION                      -lvtkNetCDF-$$VTKVERSION \
+-lvtkFiltersModelingPython27D-$$VTKVERSION             -lvtkNetCDF_cxx-$$VTKVERSION \
+-lvtkFiltersParallel-$$VTKVERSION                      -lvtkParallelCore-$$VTKVERSION \
+-lvtkFiltersParallelImaging-$$VTKVERSION               -lvtkParallelCorePython27D-$$VTKVERSION \
+-lvtkFiltersParallelImagingPython27D-$$VTKVERSION      -lvtkRenderingAnnotation-$$VTKVERSION \
+-lvtkFiltersParallelPython27D-$$VTKVERSION             -lvtkRenderingAnnotationPython27D-$$VTKVERSION \
+-lvtkFiltersPoints-$$VTKVERSION                        -lvtkRenderingContext2D-$$VTKVERSION \
+-lvtkFiltersPointsPython27D-$$VTKVERSION               -lvtkRenderingContext2DPython27D-$$VTKVERSION \
+-lvtkFiltersProgrammable-$$VTKVERSION                  -lvtkRenderingContextOpenGL2-$$VTKVERSION \
+-lvtkFiltersProgrammablePython27D-$$VTKVERSION         -lvtkRenderingContextOpenGL2Python27D-$$VTKVERSION \
+-lvtkFiltersPython-$$VTKVERSION                        -lvtkRenderingCore-$$VTKVERSION \
+-lvtkFiltersPythonPython27D-$$VTKVERSION               -lvtkRenderingCorePython27D-$$VTKVERSION \
+-lvtkFiltersSMP-$$VTKVERSION                           -lvtkRenderingFreeType-$$VTKVERSION \
+-lvtkFiltersSMPPython27D-$$VTKVERSION                  -lvtkRenderingFreeTypePython27D-$$VTKVERSION \
+-lvtkFiltersSelection-$$VTKVERSION                     -lvtkRenderingGL2PSOpenGL2-$$VTKVERSION \
+-lvtkFiltersSelectionPython27D-$$VTKVERSION            -lvtkRenderingGL2PSOpenGL2Python27D-$$VTKVERSION \
+-lvtkFiltersSources-$$VTKVERSION                       -lvtkRenderingImage-$$VTKVERSION \
+-lvtkFiltersSourcesPython27D-$$VTKVERSION              -lvtkRenderingImagePython27D-$$VTKVERSION \
+-lvtkFiltersStatistics-$$VTKVERSION                    -lvtkRenderingLOD-$$VTKVERSION \
+-lvtkFiltersStatisticsPython27D-$$VTKVERSION           -lvtkRenderingLODPython27D-$$VTKVERSION \
+-lvtkFiltersTexture-$$VTKVERSION                       -lvtkRenderingLabel-$$VTKVERSION \
+-lvtkFiltersTexturePython27D-$$VTKVERSION              -lvtkRenderingLabelPython27D-$$VTKVERSION \
+-lvtkFiltersVerdict-$$VTKVERSION                       -lvtkRenderingOpenGL2-$$VTKVERSION \
+-lvtkFiltersVerdictPython27D-$$VTKVERSION              -lvtkRenderingOpenGL2Python27D-$$VTKVERSION \
+-lvtkGeovisCore-$$VTKVERSION                           -lvtkRenderingVolume-$$VTKVERSION \
+-lvtkGeovisCorePython27D-$$VTKVERSION                  -lvtkRenderingVolumeOpenGL2-$$VTKVERSION \
+-lvtkIOAMR-$$VTKVERSION                                -lvtkRenderingVolumeOpenGL2Python27D-$$VTKVERSION \
+-lvtkIOAMRPython27D-$$VTKVERSION                       -lvtkRenderingVolumePython27D-$$VTKVERSION \
+-lvtkIOCore-$$VTKVERSION                               -lvtkViewsContext2D-$$VTKVERSION \
+-lvtkIOCorePython27D-$$VTKVERSION                      -lvtkViewsContext2DPython27D-$$VTKVERSION \
+-lvtkIOEnSight-$$VTKVERSION                            -lvtkViewsCore-$$VTKVERSION \
+-lvtkIOEnSightPython27D-$$VTKVERSION                   -lvtkViewsCorePython27D-$$VTKVERSION \
+-lvtkIOExodus-$$VTKVERSION                             -lvtkViewsInfovis-$$VTKVERSION \
+-lvtkIOExodusPython27D-$$VTKVERSION                    -lvtkViewsInfovisPython27D-$$VTKVERSION \
+-lvtkIOExport-$$VTKVERSION                             -lvtkWrappingPython27Core-$$VTKVERSION \
+-lvtkIOExportPython27D-$$VTKVERSION                    -lvtkalglib-$$VTKVERSION \
+-lvtkIOGeometry-$$VTKVERSION                           -lvtkexoIIc-$$VTKVERSION \
+-lvtkIOGeometryPython27D-$$VTKVERSION                  -lvtkexpat-$$VTKVERSION \
+-lvtkIOImage-$$VTKVERSION                              -lvtkfreetype-$$VTKVERSION \
+-lvtkIOImagePython27D-$$VTKVERSION                     -lvtkgl2ps-$$VTKVERSION \
+-lvtkIOImport-$$VTKVERSION                             -lvtkglew-$$VTKVERSION \
+-lvtkIOImportPython27D-$$VTKVERSION                    -lvtkhdf5-$$VTKVERSION \
+-lvtkIOInfovis-$$VTKVERSION                            -lvtkhdf5_hl-$$VTKVERSION \
+-lvtkIOInfovisPython27D-$$VTKVERSION                   -lvtkjpeg-$$VTKVERSION \
+-lvtkIOLSDyna-$$VTKVERSION                             -lvtkjsoncpp-$$VTKVERSION \
+-lvtkIOLSDynaPython27D-$$VTKVERSION                    -lvtklibxml2-$$VTKVERSION \
+-lvtkIOLegacy-$$VTKVERSION                             -lvtkmetaio-$$VTKVERSION \
+-lvtkIOLegacyPython27D-$$VTKVERSION                    -lvtkoggtheora-$$VTKVERSION \
+-lvtkIOMINC-$$VTKVERSION                               -lvtkpng-$$VTKVERSION \
+-lvtkIOMINCPython27D-$$VTKVERSION                      -lvtkproj4-$$VTKVERSION \
+-lvtkIOMovie-$$VTKVERSION                              -lvtksqlite-$$VTKVERSION \
+-lvtkIOMoviePython27D-$$VTKVERSION                     -lvtksys-$$VTKVERSION \
+-lvtkIONetCDF-$$VTKVERSION                             -lvtktiff-$$VTKVERSION \
+-lvtkIONetCDFPython27D-$$VTKVERSION                    -lvtkverdict-$$VTKVERSION \
+-lvtkIOPLY-$$VTKVERSION                                -lvtkzlib-$$VTKVERSION
+
+
 # Kahan sum for more accurate summation
 DEFINES += USE_KAHAN_SUM
 
@@ -87,7 +190,10 @@ HEADERS = $$MSC_PATH/include/*.h \
 
 SOURCES = $$MSC_PATH/src/*.cxx \
           $$TOPOMS_PATH/src/TopoMS.cpp \
-          $$TOPOMS_PATH/src/Utils.cpp  \
+          $$TOPOMS_PATH/src/TopoMS-vtk.cpp \
+          $$TOPOMS_PATH/src/Utils.cpp \
+          $$TOPOMS_PATH/src/MSCBond.cpp  \
+          $$TOPOMS_PATH/src/vtkVolumeSlicer.cpp  \
           $$PWD/src/*.cpp
 
 ## -------------------------------------------------

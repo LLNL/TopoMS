@@ -1183,10 +1183,11 @@ namespace MSC {
             m_base_grid(base_grid) {
             m_base_grid_xyz = base_grid->XYZ();
             this->InitializeValues();
-
-            printf(" -- Created TopologicalRegularGrid [%d %d %d] = %d cells. dcells = (%d, %d, %d, %d)\n",
+            //printf(" -- Created TopologicalRegularGrid [%d %d %d] = %d cells. dcells = (%d, %d, %d, %d)\n",
+            printf(" [%d %d %d] = %d cells; dcells = (%d, %d, %d, %d)...",
                    m_mesh_xyz[0], m_mesh_xyz[1], m_mesh_xyz[2], m_num_cells,
                    m_num_dcells[0], m_num_dcells[1], m_num_dcells[2], m_num_dcells[3]);
+            fflush(stdout);
         }
 
 

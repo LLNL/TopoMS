@@ -271,64 +271,70 @@ END OF TERMS AND CONDITIONS
 #include "TopoMS_MainWindow.h"
 #include "TopoMS_Viewer.h"
 #include "TransferFunctionEditor.h"
+#include "vtkVolumeSlicer.h"
 
 // -----------------------------------------------------------------
 void TopoMSApp::update_plabels() {
     this->ui.dsb_persval->setValue( m_mdlayer->get_persistence() );
 }
-void TopoMSApp::on_pb_saveBader_clicked() {
-    m_mdlayer->write_bader();
-}
-void TopoMSApp::on_pb_saveGraph_clicked() {
-    m_mdlayer->write_msc();
-}
+void TopoMSApp::on_pb_saveBader_clicked() {    m_mdlayer->write_bader();    }
+void TopoMSApp::on_pb_saveGraph_clicked() {    m_mdlayer->write_msc();      }
 
 void TopoMSApp::on_pb_updateGraph_clicked() {
 
     if (!persval_chngd && !filterval_chngd)
         return;
 
-    this->m_mdlayer->simplify_msc( this->ui.dsb_persval->value(), this->ui.dsb_filterval->value() );
+    if (this->m_mdlayer->m_fieldtype == TopoMS::FT_CHG) {
+        this->m_mdlayer->extract_mgraph( this->ui.dsb_persval->value(), this->ui.dsb_filterval->value() );
+    }
+    else {
+        this->m_mdlayer->extract_lpot_nbrhood_li(this->ui.dsb_persval->value(), this->ui.dsb_filterval->value());
+    }
 
     filterval_chngd = false;
     persval_chngd = false;
     this->m_viewer->updateGL();
 }
 
+void TopoMSApp::on_cb_log2_toggled(bool val) {
+    m_viewer->draw_vtiSlice(this->m_mdlayer->m_slicer_function->slice());
+    this->m_viewer->updateGL();
+}
 void TopoMSApp::on_cb_log_toggled(bool val) {
 
     size_t fsz = m_mdlayer->get_gridSize();
     const FLOATTYPE *func = m_mdlayer->get_func();
     float l = m_mdlayer->m_negated ? -1.0 : 1.0;
 
-    if (m_func == 0) {
-        m_func = new float[fsz];
-    }
-
     // linear
     if (!val) {
         for(size_t i = 0; i < fsz; i++) {
-            m_func[i] = l*func[i];
+            m_funcVol[i] = l*func[i];
         }
     }
 
     // log
     else {
         for(size_t i = 0; i < fsz; i++) {
-            m_func[i] = std::log10(1.0 + l*func[i]);
+            m_funcVol[i] = std::log10(1.0 + l*func[i]);
         }
     }
 
-    m_plot->set_function(m_func, m_mdlayer->get_gridSize());
-    m_plot->set_histogram(128);
-    m_viewer->set_volrendFunction(m_func);
-
-    m_plot->replot();
+    m_viewer->set_volrendFunction(m_funcVol);
+    m_voltf_plot->set_function(m_funcVol, m_mdlayer->get_gridSize());
+    m_voltf_plot->set_histogram(128);
+    m_voltf_plot->replot();
     m_viewer->updateGL();
 }
 
-void TopoMSApp::tfunc_updated() {
-    m_viewer->set_volrendTransferFunction(m_plot->tfunc, m_plot->tfsize);
+void TopoMSApp::surtfunc_updated() {
+    m_viewer->set_sliceTransferFunction(m_surtf_plot->tfunc, m_surtf_plot->tfsize);
+    m_viewer->updateGL();
+}
+
+void TopoMSApp::voltfunc_updated() {
+    m_viewer->set_volrendTransferFunction(m_voltf_plot->tfunc, m_voltf_plot->tfsize);
     m_viewer->updateGL();
 }
 
@@ -336,9 +342,11 @@ void TopoMSApp::tfunc_updated() {
 TopoMSApp::TopoMSApp() : QMainWindow() {
 
     m_mdlayer = new TopoMS();
-    m_plot = new TFEditor();
     m_viewer = new TopoMSViewer(this);
-    m_func = 0;
+    m_funcVol = 0;
+
+    m_voltf_plot = new TFEditor("Volume Transfer Function");
+    m_surtf_plot = new TFEditor("Surface Transfer Function");
 
     ui.setupUi(this);
     this->setCentralWidget(m_viewer);
@@ -364,32 +372,54 @@ bool TopoMSApp::initialize(QString configfilename) {
     this->ui.cb_showAtoms->setEnabled(this->m_mdlayer->m_inputtype == TopoMS::IT_VASP);
 
     if (this->m_mdlayer->m_config->tfpath.length() == 0) {
-        m_plot->init_tfunc();
+        m_voltf_plot->init_tfunc();
+        m_surtf_plot->init_tfunc();
     }
     else {
-        m_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
+        m_voltf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
+        m_surtf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
     }
 
     //m_viewer->set_dims(m_mdlayer->get_gridDims());
-    m_viewer->set_lattice(m_mdlayer->m_metadata.m_lattice, m_mdlayer->m_metadata.m_lattice_origin, m_mdlayer->m_metadata.m_grid_dims);
-    m_viewer->set_volrendTransferFunction(m_plot->tfunc, m_plot->tfsize);
+    m_viewer->set_lattice(this->m_mdlayer->m_metadata.m_lattice,
+                          this->m_mdlayer->m_metadata.m_lattice_origin,
+                          this->m_mdlayer->m_metadata.m_grid_dims);
 
-    QObject::connect(m_plot, SIGNAL(tfunc_updated()), this, SLOT(tfunc_updated()));
+    QObject::connect(m_voltf_plot, SIGNAL(tfunc_updated()), this, SLOT(voltfunc_updated()));
+    QObject::connect(m_surtf_plot, SIGNAL(tfunc_updated()), this, SLOT(surtfunc_updated()));
 
-    m_plot->show();
+    m_voltf_plot->show();
+    m_surtf_plot->show();
     this->show();
 
     // --------------------------------------------
     // the following will be moved to ui based functions
     m_mdlayer->init();
 
-    this->ui.dsb_persval->setValue(m_mdlayer->m_config->sval_threshold);
-    this->ui.dsb_filterval->setValue(m_mdlayer->m_config->fval_threshold);
+    this->ui.dsb_persval->setValue(m_mdlayer->m_config->threshold_simp);
+    this->ui.dsb_filterval->setValue(m_mdlayer->m_config->threshold_filt);
 
     static std::pair<FLOATTYPE, FLOATTYPE> vr = m_mdlayer->get_frange();
     this->ui.label_minval->setText(" min:  " + QString::number(vr.first));
     this->ui.label_maxval->setText(" max: " + QString::number(vr.second));
     update_plabels();
+
+    // --------------------------------------------
+    // transfer function
+    size_t fsz = m_mdlayer->get_gridSize();
+    const FLOATTYPE *func = m_mdlayer->get_func();
+    float l = m_mdlayer->m_negated ? -1.0 : 1.0;
+
+    m_funcVol = new float[fsz];
+    for(size_t i = 0; i < fsz; i++) {
+        m_funcVol[i] = l*func[i];
+    }
+
+    m_viewer->set_volrendFunction(m_funcVol);
+    m_voltf_plot->set_function(m_funcVol, m_mdlayer->get_gridSize());
+    m_voltf_plot->set_histogram(128);
+
+    // --------------------------------------------
 
     if (m_mdlayer->bader() == false) {
         this->ui.groupBox_bader->setEnabled(false);
@@ -397,8 +427,10 @@ bool TopoMSApp::initialize(QString configfilename) {
     if (m_mdlayer->msc() == false){
         this->ui.groupBox_graph->setEnabled(false);
         this->ui.groupBox_topo->setEnabled(false);
+        this->ui.cb_saddleSlice->setEnabled(false);
+        this->ui.cb_log2->setEnabled(false);
     }
-    if( !m_mdlayer->m_metadata.m_lattice.is_eye() ) {
+    if( !m_mdlayer->m_metadata.m_lattice.is_cuboid() ) {
         std::cerr << "Volume rendering currently not supported for non-cuboidal lattice!\n";
         this->ui.cb_volRend->setChecked(false);
         this->ui.cb_volRend->setEnabled(false);

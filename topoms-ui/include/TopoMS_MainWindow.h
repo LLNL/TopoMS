@@ -294,11 +294,13 @@ class TopoMSApp : public QMainWindow {
 private:
 
     TopoMSViewer *m_viewer;
-    TFEditor *m_plot;
-    float *m_func;
+    float *m_funcVol, m_funcSlice;
+
+    TFEditor *m_voltf_plot;
 
 public:
 
+    TFEditor *m_surtf_plot;     // public because the viewer will update this
     TopoMS *m_mdlayer;
     Ui::TopoMSUI ui;
 
@@ -312,15 +314,22 @@ public:
     // ui related queries
     void update_plabels();
 
+    bool show_saddleSlice() const {     return ui.cb_saddleSlice->isChecked();  }
     bool show_volRendering() const {    return ui.cb_volRend->isChecked();      }
+
     bool show_atoms() const {           return ui.cb_showAtoms->isChecked();    }
     bool show_extrema() const {         return ui.cb_extrema->isChecked();      }
-    bool show_paths() const {           return ui.cb_paths->isChecked();        }
 
-    bool show_topology(int idx = -1) const {
+    bool show_mpaths() const {           return ui.cb_mpaths->isChecked();        }
+    bool show_mnodes() const {           return ui.cb_mnodes->isChecked();        }
 
-        if (!ui.groupBox_topo->isChecked())
-            return false;
+    bool show_tnodes() const {
+        return show_topology(0)||show_topology(1)||show_topology(2)||show_topology(3);
+    }
+    bool show_tarcs() const {
+        return show_topology(4)||show_topology(5)||show_topology(6);
+    }
+    bool show_topology(int idx) const {
 
         switch (idx) {
             case -1:    return true;
@@ -335,15 +344,23 @@ public:
         return false;
     }
 
+    float scale_atom() const {  return ui.dsb_atom->value();        }
+    float scale_cp() const {    return 0.25*ui.dsb_cp->value();     }
+
 public slots:
 
-    void tfunc_updated();
+    void voltfunc_updated();
+    void surtfunc_updated();
+
+    void on_sslider_valueChanged(int){      m_viewer->updateGL();   }
 
     void on_cb_log_toggled(bool);
+    void on_cb_log2_toggled(bool);
     void on_cb_volRend_toggled(bool){       m_viewer->updateGL();   }
     void on_cb_showAtoms_toggled(bool){     m_viewer->updateGL();   }
     void on_cb_extrema_toggled(bool){       m_viewer->updateGL();   }
-    void on_cb_paths_toggled(bool){         m_viewer->updateGL();   }
+    void on_cb_mnodes_toggled(bool){        m_viewer->updateGL();   }
+    void on_cb_mpaths_toggled(bool){        m_viewer->updateGL();   }
     void on_cb_min_toggled(bool){           m_viewer->updateGL();   }
     void on_cb_sd1_toggled(bool){           m_viewer->updateGL();   }
     void on_cb_sd2_toggled(bool){           m_viewer->updateGL();   }

@@ -304,14 +304,14 @@ public:
     static QColor by_topoIndex(unsigned int idx) {
 
         switch (idx) {
-        case 0:     return Qt::darkRed;
-        case 1:     return Qt::darkYellow;
-        case 2:     return Qt::darkRed;//Cyan;
-        case 3:     return Qt::darkGreen;
+        case 0:     return Qt::darkCyan;        // min
+        case 1:     return Qt::darkYellow;      // 1-sad
+        case 2:     return Qt::darkRed;         // 2-sad
+        case 3:     return Qt::darkGreen;       // max
 
-        case 4:     return Qt::darkRed;
-        case 5:     return Qt::darkYellow;
-        case 6:     return Qt::darkCyan;
+        case 4:     return Qt::darkCyan;        // min -- 1-sad
+        case 5:     return Qt::darkYellow;      // 1-sad -- 2-sad
+        case 6:     return Qt::darkRed;         // 2-sad -- max
         }
         return Qt::black;
     }

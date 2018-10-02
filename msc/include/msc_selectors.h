@@ -30,179 +30,299 @@
 #ifndef MSC_SELECTORS_H
 #define MSC_SELECTORS_H
 
-#include "strictly_numeric_integrator.h"
-#include "numeric_integrator_region_stop.h"
-#include "numeric_integrator_expanding_region_stop.h"
-#include "timing.h"
-#include "labeling_to_bounary_labeling.h"
-#include "topological_explicit_mesh_function.h"
-#include "topological_region_growing_simple_gradient_builder.h"
-#include "topological_convergent_gradient_builder.h"
-//#include "robin_labeling.h"
-#include "adaptive_in_quad_euler_advector.h"
-#include "numeric_integrator_2d_restricted_expanding_region.h"
-#include "topological_2d_restricted_expanding_regions.h"
-#include "topological_gradient_using_algorithms.h"
-#include "topological_regular_grid_restricted.h"
-#include "isolated_region_remover.h"
-//#include "topological_utility_functions.h"
-#include "morse_smale_complex_restricted.h"
-#include "numeric_streamline_integrator.h"
+#include <cassert>
+#include "morse_smale_complex_basic.h"
+#include "topological_regular_grid.h"
+#include "msc_iterators.h"
 
 namespace MSC {
 
+// -----------------------------------------------------------------------------
+// Base case for selectors
+// -----------------------------------------------------------------------------
+class MSCSelector {
 
-    class Selector {
+protected:
 
-    protected:
+    vector<MSCSelector*> parents;
+    vector<MSCSelector*> children;
 
-        vector<Selector*> parents;
-        vector<Selector*> children;
+    bool output_valid;
 
-        // when this is called parents have been computed
-        virtual void SelectorAction() {}
-        bool output_valid;
-        size_t add_child(Selector* s) {
-            children.push_back(s);
-            return children.size();
+    // when this is called parents have been computed
+    virtual void SelectorAction() {}
+
+    size_t add_child(MSCSelector* s) {
+        children.push_back(s);
+        return children.size();
+    }
+
+public:
+
+    set<INT_TYPE> output;
+
+    MSCSelector() : output_valid(false) {}
+
+    virtual void invalidate() {
+        if (!output_valid) return; // to prevent infinite looping by accident
+        output_valid = false;
+        for (auto it = children.begin(); it != children.end(); it++) (*it)->invalidate();
+    }
+
+    size_t add_parent(MSCSelector* s) {
+        s->add_child(this);
+        parents.push_back(s);
+        invalidate();
+        return parents.size();
+    }
+
+    void compute_output() {
+
+        if (output_valid) return;
+        output.clear();
+        for (auto it = parents.begin(); it != parents.end(); it++) {
+            (*it)->compute_output();
         }
-    public:
+        SelectorAction();
 
-        set<INT_TYPE> output;
+        output_valid = true;
+    }
+};
 
-        Selector() : output_valid(false) {}
-        virtual void invalidate() {
-            if (!output_valid) return; // to prevent infinite looping by accident
-            output_valid = false;
-            for (auto it = children.begin(); it != children.end(); it++) (*it)->invalidate();
+// -----------------------------------------------------------------------------
+// Living Nodes selector
+// i.e., select nodes still living under current persistence
+// -----------------------------------------------------------------------------
+template<class MSCType>
+class MSCSelectorLivingNodes : public MSCSelector {
+
+protected:
+    MSCType* mMsc;
+    virtual void SelectorAction() {
+
+        // Harsh added this assertion, since it is assumed
+        assert(this->parents.empty());
+        for (size_t i = 0; i < mMsc->numNodes(); i++) {
+            if (mMsc->isNodeAlive(i)) this->output.insert(i);
+        }
+    }
+public:
+    MSCSelectorLivingNodes(MSCType* msc) : mMsc(msc) {}
+};
+
+// -----------------------------------------------------------------------------
+// NodeIndex selector
+// i.e., select nodes of a certain index
+// -----------------------------------------------------------------------------
+template<class MSCType>
+class MSCSelectorNodeIndex : public MSCSelector {
+
+protected:
+    MSCType* mMsc;
+    DIM_TYPE mIndex;
+
+    virtual void SelectorAction() {
+        for (auto pit = parents.begin(); pit != parents.end(); pit++) {
+        for (auto it = (*pit)->output.begin(); it != (*pit)->output.end(); it++) {
+            if (mMsc->getNode(*it).dim == mIndex) this->output.insert(*it);
+        }
+        }
+    }
+public:
+    MSCSelectorNodeIndex(MSCType* msc, DIM_TYPE index) : mMsc(msc), mIndex(index) {}
+};
+
+// -----------------------------------------------------------------------------
+// NearestNode selector
+// i.e., select the nearest node to a given position
+// -----------------------------------------------------------------------------
+template<class MSCType>
+class MSCSelectorNearestNode : public MSCSelector {
+
+protected:
+    MSCType* mMsc;
+    MSC::Vec3d mPos;
+
+    virtual void SelectorAction() {
+        std::multimap<FLOATTYPE, INDEX_TYPE> distmap;
+        for (auto pit = parents.begin(); pit != parents.end(); pit++) {
+        for (auto it = (*pit)->output.begin(); it != (*pit)->output.end(); it++) {
+
+            MSC::Vec3l lcoord;
+            mMsc->GetMesh()->cellid2Coords(mMsc->getNode(*it).cellindex, lcoord);
+
+            MSC::Vec3d dcoord(lcoord);
+            distmap.insert(std::make_pair((mPos-dcoord).MagSq(), *it));
+        }
+        }
+        this->output.clear();
+        this->output.insert(distmap.begin()->second);
+    }
+public:
+    // this expects the position in grid coordinates
+    MSCSelectorNearestNode(MSCType* msc, const MSC::Vec3d &gPos) : mMsc(msc), mPos(gPos) {
+        // convert from (regular) grid to topological grid
+        mPos *= 2.0;
+    }
+};
+
+// -----------------------------------------------------------------------------
+// IncidentArcs selector
+// i.e., select the arcs connected to given nodes
+// -----------------------------------------------------------------------------
+template<class MSCType>
+class MSCSelectorIncidentArcs : public MSCSelector {
+
+protected:
+    MSCType* mMsc;
+    int mIdx;
+
+    virtual void SelectorAction() {
+        this->output.clear();
+        MSC::MSCIteratorSurroundingArcs<MSCType> sit(mMsc);
+        for (auto pit = parents.begin(); pit != parents.end(); pit++) {                 // for each parent selector
+        for (auto it = (*pit)->output.begin(); it != (*pit)->output.end(); it++) {      // for each node
+        for (sit.begin(*it); sit.valid(); sit.advance()) {                              // each arc
+
+            INDEX_TYPE arcId = sit.value();
+            if (mIdx == -1 || mIdx == mMsc->getArc(arcId).dim)
+                this->output.insert(arcId);
+        }
+        }
+        }
+    }
+public:
+    // this expects the position in grid coordinates
+    MSCSelectorIncidentArcs(MSCType* msc, int idx=-1) : mMsc(msc), mIdx(idx) {}
+};
+
+
+template<class MSCType>
+class MSCSelectorIncidentArcs2 : public MSCSelector {
+
+protected:
+    MSCType* mMsc;
+    int mIdx;
+
+    virtual void SelectorAction() {
+        this->output.clear();
+
+        std::set<INDEX_TYPE> inodes;
+        for (auto pit = parents.begin(); pit != parents.end(); pit++) {                 // for each parent selector
+        for (auto it = (*pit)->output.begin(); it != (*pit)->output.end(); it++) {      // for each node
+            inodes.insert(*it);
+        }
         }
 
-        size_t add_parent(Selector* s) {
-            s->add_child(this);
-            parents.push_back(s);
-            invalidate();
-            return parents.size();
+        printf(" selected incident arcs to %d nodes!\n", inodes.size());
+        size_t narcs = mMsc->numArcs();
+        for(size_t i = 0; i < narcs; i++) {
+
+            if (!mMsc->isArcAlive(i))                       continue;
+
+            MSC::arc<FLOATTYPE> &a = mMsc->getArc(i);
+
+            if (mIdx != -1 && mIdx != mMsc->getArc(i).dim)  continue;
+
+            bool lowerMatch = inodes.count(a.lower) > 0;  // lower node of this arc exists in inodes
+            bool upperMatch = inodes.count(a.upper) > 0;  // upper node of this arc exists in inodes
+            if (!lowerMatch && !upperMatch)                 continue;
+
+            this->output.insert(i);
         }
+    }
+public:
+    // this expects the position in grid coordinates
+    MSCSelectorIncidentArcs2(MSCType* msc, int idx=-1) : mMsc(msc), mIdx(idx) {}
+};
 
-        void compute_output() {
-            if (output_valid) return;
-            output.clear();
-            for (auto it = parents.begin(); it != parents.end(); it++) {
-                (*it)->compute_output();
-            }
+// -----------------------------------------------------------------------------
+// IncidentNodes selector
+// i.e., select the end points of given arcs
+// -----------------------------------------------------------------------------
+template<class MSCType>
+class MSCSelectorIncidentNodes : public MSCSelector {
 
-            SelectorAction();
+protected:
+    MSCType* mMsc;
+    int mIdx;
 
-            output_valid = true;
-            return;
+    virtual void SelectorAction() {
+        this->output.clear();
+        for (auto pit = parents.begin(); pit != parents.end(); pit++) {                 // for each parent selector
+        for (auto it = (*pit)->output.begin(); it != (*pit)->output.end(); it++) {      // for each arc
 
-
+            arc<FLOATTYPE> &a = mMsc->getArc(*it);
+            if(mIdx != 1)   this->output.insert(a.lower);
+            if(mIdx != 0)   this->output.insert(a.upper);
         }
-    };
-
-    template<class MSCType>
-    class MSCSelectorLivingNodes : public Selector {
-    protected:
-        MSCType* mMsc;
-        virtual void SelectorAction() {
-            //printf("MSCSelectorLivingNodes::SelectorAction() computing...\n");
-            for (int i = 0; i < mMsc->numNodes(); i++) {
-                if (mMsc->isNodeAlive(i)) this->output.insert(i);
-            }
-            //printf("MSCSelectorLivingNodes::SelectorAction produced %d indices\n", output.size());
         }
-    public:
-        MSCSelectorLivingNodes(MSCType* msc) : mMsc(msc) {}
-    };
+    }
+public:
+    // this expects the position in grid coordinates
+    MSCSelectorIncidentNodes(MSCType* msc, int idx=-1) : mMsc(msc), mIdx(idx) {}
+};
 
-    template<class MSCType>
-    class MSCSelectorNodeIndex : public Selector {
-    protected:
-        MSCType* mMsc;
-        DIM_TYPE mIndex;
-        virtual void SelectorAction() {
-            //printf("MSCSelectorNodeIndex::SelectorAction() computing...\n");
-            for (auto pit = parents.begin(); pit != parents.end(); pit++) {
-                for (auto it = (*pit)->output.begin(); it != (*pit)->output.end(); it++) {
-                    if (mMsc->getNode(*it).dim == mIndex) this->output.insert(*it);
-                }
-            }
-            //printf("MSCSelectorNodeIndex::SelectorAction produced %d indices\n", output.size());
+// -----------------------------------------------------------------------------
+// Representative1Saddle selector
+// -----------------------------------------------------------------------------
+template<class MSCType>
+class MSCSelectorRepresentative1Saddle : public MSCSelector {
+
+protected:
+    MSCType* mMsc;
+    DIM_TYPE mIndex;
+
+    bool lessthan(INT_TYPE a, INT_TYPE b) {
+
+        node<FLOATTYPE>& na = mMsc->getNode(a);
+        node<FLOATTYPE>& nb = mMsc->getNode(b);
+        if (na.value == nb.value) return a < b;
+        return na.value < nb.value;
+    }
+
+    pair<INT_TYPE, INT_TYPE> getExtremumPair(INT_TYPE saddle) {
+
+        MSCIteratorSurroundingLivingArcs<MSCType> sit(mMsc);
+        int numext = 0;
+        INT_TYPE extrema[2];
+
+        for (sit.begin(saddle); sit.valid(); sit.advance()) {
+            arc<FLOATTYPE>& a = mMsc->getArc(sit.value());
+            if (a.upper == saddle) extrema[numext++] = a.lower;
         }
-    public:
-        MSCSelectorNodeIndex(MSCType* msc, DIM_TYPE index) : mMsc(msc), mIndex(index) {}
-    };
+        if (numext == 1) {                  return pair<INT_TYPE, INT_TYPE>(extrema[0], extrema[0]);    }
+        else if (extrema[0] < extrema[1]) { return pair<INT_TYPE, INT_TYPE>(extrema[0], extrema[1]);    }
+        else {                              return pair<INT_TYPE, INT_TYPE>(extrema[1], extrema[0]);    }
+    }
 
-    template<class MSCType>
-    class MSCSelectorRepresentative1Saddle : public Selector {
-    protected:
-        MSCType* mMsc;
-        DIM_TYPE mIndex;
-        pair<INT_TYPE, INT_TYPE> getExtremumPair(INT_TYPE saddle) {
-            typename MSCType::SurroundingLivingArcsIterator sit(mMsc);
-            INT_TYPE extrema[2]; int numext = 0;
-            for (sit.begin(saddle); sit.valid(); sit.advance()) {
-                //printf("asdf %d\n", sit.value());
-                INT_TYPE aid = sit.value();
-                arc<FLOATTYPE>& a = mMsc->getArc(aid);
-                if (a.upper == saddle) extrema[numext++] = a.lower;
-            }
-            //printf("done numext=%d\n", numext);
-            if (numext == 1) {
-                return pair<INT_TYPE, INT_TYPE>(extrema[0], extrema[0]);
-            }
+
+    virtual void SelectorAction() {
+        map<pair<INT_TYPE, INT_TYPE>, INT_TYPE> saddlemap;
+
+        for (auto pit = parents.begin(); pit != parents.end(); pit++) {
+        for (auto it = (*pit)->output.begin(); it != (*pit)->output.end(); it++) {
+
+            INT_TYPE saddle = *it;
+            pair<INT_TYPE, INT_TYPE> p = getExtremumPair(saddle);
+
+            if (saddlemap.count(p) == 0) {              saddlemap[p] = saddle;  }
             else {
-                if (extrema[0] < extrema[1]) {
-                    return pair<INT_TYPE, INT_TYPE>(extrema[0], extrema[1]);
-                }
-                else {
-                    return pair<INT_TYPE, INT_TYPE>(extrema[1], extrema[0]);
-                }
-
+                INT_TYPE othersaddle = saddlemap[p];
+                if (lessthan(saddle, othersaddle)) {    saddlemap[p] = saddle;  }
             }
-
         }
-        bool lessthan(INT_TYPE a, INT_TYPE b) {
-            node<FLOATTYPE>& na = mMsc->getNode(a);
-            node<FLOATTYPE>& nb = mMsc->getNode(b);
-            if (na.value == nb.value) return a < b;
-            return na.value < nb.value;
         }
 
-        virtual void SelectorAction() {
-            //printf("MSCSelectorRepresentative1Saddle::SelectorAction() computing...\n");
-            map<pair<INT_TYPE, INT_TYPE>, INT_TYPE> saddlemap;
-
-            for (auto pit = parents.begin(); pit != parents.end(); pit++) {
-                for (auto it = (*pit)->output.begin(); it != (*pit)->output.end(); it++) {
-
-                    INT_TYPE saddle = *it;
-                    //printf("doing %d\n", saddle);
-                    pair<INT_TYPE, INT_TYPE> p = getExtremumPair(saddle);
-
-                    if (saddlemap.count(p) == 0) {
-                        saddlemap[p] = saddle;
-                    }
-                    else {
-                        INT_TYPE othersaddle = saddlemap[p];
-                        if (lessthan(saddle, othersaddle)) {
-                            saddlemap[p] = saddle;
-                        }
-                    }
-                }
+        for (auto it = saddlemap.begin(); it != saddlemap.end(); it++) {
+            if ((*it).first.first != (*it).first.second)
+                output.insert((*it).second);
             }
-            //printf("b\n");
-            for (auto it = saddlemap.begin(); it != saddlemap.end(); it++) {
-                if ((*it).first.first != (*it).first.second)
-                    output.insert((*it).second);
-            }
-            //printf("MSCSelectorRepresentative1Saddle::SelectorAction produced %d indices\n", output.size());
         }
 
-    public:
-        MSCSelectorRepresentative1Saddle(MSCType* msc) : mMsc(msc) {}
-    };
+public:
+    MSCSelectorRepresentative1Saddle(MSCType* msc) : mMsc(msc) {}
+};
 
-}
-
+}   // end of namespace
 #endif

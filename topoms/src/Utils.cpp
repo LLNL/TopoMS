@@ -117,10 +117,9 @@ std::string Utils::get_directory(std::string filename) {
         return "./";
     }
 }
-
+#if 0
 std::string Utils::toupper(std::string& str) {
-
-    for(int i=0; str[i]!=0; i++) {
+    for(uint32_t i=0; str[i]!=0; i++) {
         if(97 <= str[i] && str[i] <= 122){
             str[i]-=32;
         }
@@ -129,12 +128,22 @@ std::string Utils::toupper(std::string& str) {
 }
 
 std::string Utils::trim(std::string& str) {
-
     str.erase(0, str.find_first_not_of(' '));       //prefixing spaces
     str.erase(str.find_last_not_of(' ')+1);         //surfixing spaces
     return str;
 }
 
+std::string Utils::remove_carriagereturn(std::string &str) {
+    if (str[str.length()-1] == '\r')  str = str.erase(str.length()-1, 1);
+}
+
+std::string Utils::rtrim(std::string &str) {
+    //remove_carriagereturn(str);
+    str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) {
+        return !std::isspace(ch);
+    }).base(), str.end());
+}
+#endif
 std::vector<std::string> Utils::tokenize(const std::string &line, char delim) {
 
     std::vector<std::string> tokens;

@@ -57,118 +57,68 @@ purposes.
 */
 
 /**
- *  @file    Vec3.h
+ *  @file    MSCBond.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
- *  @date    10/01/2017
+ *  @date    10/01/2018
  *  @version 1.0
  *
- *  @brief This class handles 3-dimensional vector objects
+ *  @brief This file provides a class for analyzing a bond.
  *
  *  @section DESCRIPTION
  *
- *  This class handles 3-dimensional vector objects
+ *  This file provides a class for analyzing a bond.
  *
  */
 
-#ifndef _VEC3_H_
-#define _VEC3_H_
+#ifndef _MSCBOND_H_
+#define _MSCBOND_H_
 
-#include <cmath>
-#include <cstdio>
+#include <vector>
+#include <utility>
 
-template <typename T>
-class Vec3 {
+#include "basic_types.h"
+#include "vectors.h"
 
-private:
-    T v[3];
+/// -----------------------------------------------------------------------
+/// Forward declaration done!
+/// -----------------------------------------------------------------------
 
-public:
-    Vec3() {                v[0] = v[1] = v[2] = T(0);      }
-    Vec3(T x, T y, T z) {   v[0] = x; v[1] = y; v[2] = z;   }
+/**
+  *  @brief This struct provides a colleciton of utilities to handle MSC bonds
+  */
+struct MSCBond {
 
-    T& operator[](int i) {              return v[i]; }
-    const T& operator[](int i) const {  return v[i]; }
+    INT_TYPE saddle;                // saddle node id
+    MSC::Vec3d scoords;             // saddle's MSC coords
 
-    inline T magnSq() const {    return (v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]);   }
-    inline T magn() const {      return sqrt(magnSq());                                   }
+    std::vector<INT_TYPE> extrema;  // the extrema this saddle is attached to
+    std::vector<MSC::Vec3d> ecoords;// the extrema's MSC coords
 
-    void operator=(const Vec3& other){
-        this->v[0] = other.v[0];
-        this->v[1] = other.v[1];
-        this->v[2] = other.v[2];
-    }
-    void operator+=(const Vec3& other) {
-        this->v[0] += other.v[0];
-        this->v[1] += other.v[1];
-        this->v[2] += other.v[2];
-    }
-    void operator-=(const Vec3& other) {
-        this->v[0] -= other.v[0];
-        this->v[1] -= other.v[1];
-        this->v[2] -= other.v[2];
-    }
-    Vec3 operator+(const Vec3  &a) const {
-        Vec3 res(*this);
-        res += a;
-        return res;
-    }
-    Vec3 operator-(const Vec3  &a) const {
-        Vec3 res(*this);
-        res -= a;
-        return res;
-    }
-    Vec3 operator+(const T  val) const {
-        Vec3 res(*this);
-        res.v[0] += val; res.v[1] += val; res.v[2] += val;
-        return res;
-    }
-    Vec3 operator*(const T  val) const {
-        Vec3 res(this->v[0], this->v[1], this->v[2]);// = (*this);
-        res.v[0] *= val; res.v[1] *= val; res.v[2] *= val;
-        return res;
-    }
-    bool operator==(const Vec3& other) const {
-        return memcmp(this, &other, sizeof(Vec3)) == 0;
+    std::vector<size_t> atomIds;    // the corresponding atoms (starting with 1)
+
+    std::vector<std::vector<MSC::Vec3d>> paths;  // geometric representation of paths
+    std::vector<std::pair<float, MSC::Vec3d>> parameterization;
+
+    double ichg, iarea;
+
+    MSCBond(INT_TYPE _saddle=-1) : saddle(_saddle), ichg(-1), iarea(-1) {}
+
+    bool check2() const {
+        if (this->paths.size() != 2 || this->atomIds.size() != 2 ||
+            this->extrema.size() != 2 || this->ecoords.size() != 2) {
+            printf(" Bond %d does not attach to 2 extrema. sizes = [%d %d, %d %d]\n",
+                   this->saddle, this->paths.size(), this->atomIds.size(), this->extrema.size(), this->ecoords.size());
+            return false;
+        }
+        return true;
     }
 
-    // THIS GIVES REMAINDER, NOT MODULO
-    Vec3 operator%(const Vec3& other) const{
-        Vec3 res;
-        res.v[0] = this->v[0] % other.v[0];
-        res.v[1] = this->v[1] % other.v[1];
-        res.v[2] = this->v[2] % other.v[2];
-        return res;
-    }
+    static void fix_periodic(MSC::Vec3d &p, const MSC::Vec3d &orig, const size_t dims[3]);
 
-    operator Vec3<int>() const {    return Vec3<int>(this->v[0], this->v[1], this->v[2]); }
-    operator Vec3<double>() const { return Vec3<double>(this->v[0], this->v[1], this->v[2]); }
-
-    // linear interpolation betwee 2 vectors: returns the vector a * (1-t) + b * t
-    static Vec3<double> lerp(const Vec3<double>& a, const Vec3<double>& b, const double t)  {
-        return (a * (1.0 - t)) + (b * (t));
-    }
-
-    void print_vi() const {
-        printf("(%d, %d, %d)\n", v[0], v[1], v[2]);
-    }
-    void print_vf() const {
-        printf("(%f, %f, %f)\n", v[0], v[1], v[2]);
-    }
-
-    // this is a hack that rounds towards -infinity for "small" negative values
-    Vec3<int> int_floor() const {
-        Vec3 dres = *this;
-        dres = dres + 1000.0;
-        Vec3<int> ires = dres;
-        ires = ires + -1000;
-        return ires;
-    }
+    void parameterize(const size_t dims[3]);
+    void get_points(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], float p) const;
+    void get_points_idx(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], int pidx) const;
+    void study_value(const double *func, const size_t dims[3], std::vector<std::pair<float, float> > &vals);
 };
-
-
-typedef Vec3<int> Vec3i;
-typedef Vec3<bool> Vec3b;
-typedef Vec3<float> Vec3f;
-typedef Vec3<double> Vec3d;
 
 #endif

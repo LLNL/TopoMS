@@ -338,6 +338,9 @@ void TFEditor::set_histogram(uint num_bins, bool use_log) {
     if(!histo)
         return;
 
+    if (fsize == 0)
+        return;
+
     // create histogram
     QVector<double> histogram, bins;
     double bin_width = 0;
@@ -353,7 +356,7 @@ void TFEditor::set_histogram(uint num_bins, bool use_log) {
 
     this->freqAxis->rescale();
     this->valueAxis->setRange( bins[0], bins[bins.size()-1] + bin_width );
-    this->update();
+    this->replot();
 }
 
 // ===========================================================
@@ -543,7 +546,7 @@ void TFEditor::init_plots() {
     static const QString channelnames[4] = {"Red", "Green", "Blue", "Alpha"};
 
     // ----------------------------------------------
-    setWindowTitle("Transfer Function Editor");
+    setWindowTitle(this->name.c_str());
     setLocale(QLocale(QLocale::English, QLocale::UnitedKingdom)); // period as decimal separator and comma as thousand separator
 
     // ----------------------------------------------

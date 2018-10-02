@@ -73,9 +73,9 @@ purposes.
 #ifndef _MATERIAL_H_
 #define _MATERIAL_H_
 
+#include <cmath>
 #include <vector>
 #include <string>
-#include <cmath>
 #include <iostream>
 
 class Material {
@@ -105,31 +105,29 @@ public:
 
     float radius() const {
 
-        // get radius in Angstroms
+        // get radius in Angstroms in Angstrom
         // http://www.periodictable.com/Properties/A/AtomicRadius.v.wt.html
 
-        if(m_symbol == "Ti")            return 1.76;
-        if(m_symbol == "Li")            return 1.67;
-        if(m_symbol == "P")             return 0.98;
         if(m_symbol == "F")             return 0.42;
-        if(m_symbol == "C")             return 0.67;
-        if(m_symbol == "H")             return 0.53;
         if(m_symbol == "O")             return 0.48;
+        if(m_symbol == "H")             return 0.53;
+        if(m_symbol == "C")             return 0.67;
+        if(m_symbol == "Cl")            return 0.79;
         if(m_symbol == "B")             return 0.87;
+        if(m_symbol == "P")             return 0.98;
+        if(m_symbol == "Li")            return 1.67;
+        if(m_symbol == "Ti")            return 1.76;
+        if(m_symbol == "Ca")            return 1.94;
 
         return 1.0;
     }
 
     void print() const {
-        if(m_atom_number == 0) {
-            std::cout << " Atom " << m_symbol <<  " at (" << m_pos[0]<<", "<<m_pos[1]<<", "<<m_pos[2]<<")" << std::endl;
-        }
-        else if(m_symbol == "") {
-            std::cout << " Atom (atomic number " << int(m_atom_number) << ") at (" << m_pos[0]<<", "<<m_pos[1]<<", "<<m_pos[2]<<")"<< std::endl;
-        }
-        else {
-            std::cout << " Atom " << m_symbol <<  " (atomic number " << int(m_atom_number) << ") at (" << m_pos[0]<<", "<<m_pos[1]<<", "<<m_pos[2]<<")" << std::endl;
-        }
+
+        std::cout << " Atom ";
+        if(m_symbol != "") {        std::cout << m_symbol << " ";   }
+        if(m_atom_number != 0) {    std::cout << " [" << int(m_atom_number) << "] ";   }
+        std::cout << " at (" << m_pos[0]<<", "<<m_pos[1]<<", "<<m_pos[2]<<")" << std::endl;
     }
 };
 

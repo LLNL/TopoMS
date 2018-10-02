@@ -31,48 +31,47 @@
 #define TOPOLOGICAL_REGULAR_GRID_RESTRICTED_H
 
 
-#include <map>
-#include <set>
-#include "basic_types.h"
-#include "vectors.h"
-#include "regular_grid.h"
 #include "topological_regular_grid.h"
 #include "labeling.h"
 
 
-
 namespace MSC {
 
-    class TopologicalRegularGridRestricted : virtual public TopologicalRegularGrid {
+class TopologicalRegularGridRestricted : virtual public TopologicalRegularGrid {
 
-    protected:
-        const DenseLabeling<char> *m_restriction;
+protected:
+    const DenseLabeling<char> *m_restriction;
 
-    public:
-        TopologicalRegularGridRestricted(RegularGrid* base_grid) :
-            TopologicalRegularGrid(base_grid), m_restriction(0) {
+public:
+    TopologicalRegularGridRestricted(RegularGrid* base_grid) :
+        TopologicalRegularGrid(base_grid), m_restriction(nullptr) {
+        //printf(" -- Created TopologicalRegularGridRestricted \n");
+    }
 
-            printf(" -- Created TopologicalRegularGridRestricted\n");
+    void set_restriction(const DenseLabeling<char> *restriction) {
+        m_restriction = restriction;
+    }
+    char restrictionLabel(INDEX_TYPE cellid) const {
+
+        if (m_restriction == nullptr) {
+            std::cerr << " restriction not set for TopologicalRegularGridRestricted!\n";
         }
+        return m_restriction->GetLabel(cellid);
+    }
 
-        void set_restriction(const DenseLabeling<char> *restriction) {
-            //printf("TopologicalRegularGridRestricted::set_restriction(%p)\n", restriction);
-            m_restriction = restriction;
-        }
-        char restrictionLabel(INDEX_TYPE cellid) const {
-            return m_restriction->GetLabel(cellid);
-        }
+    BOUNDARY_TYPE boundaryValue(INDEX_TYPE cellid) const {
 
-        BOUNDARY_TYPE boundaryValue(INDEX_TYPE cellid) const {
+        //printf("TopologicalRegularGridRestricted::boundaryValue()\n");
 
-            // TopologicalRegularGrid::boundaryValue returns 0,1,2,3
-            // m_restriction has labels 0 or 1.. so this function returns (0,1,2,3) or (4,5,6,7)
+        // TopologicalRegularGrid::boundaryValue returns 0,1,2,3
+        // m_restriction has labels 0 or 1.. so this function returns (0,1,2,3) or (4,5,6,7)
 
-            //printf("TopologicalRegularGridRestricted::boundaryValue()\n");
-            return (m_restriction->GetLabel (cellid) * (maxDim()+1)) + TopologicalRegularGrid::boundaryValue (cellid);
-        }
-    };
-}
-
-
+        // Harsh added the following conditional on 07.28.2018 to make this class
+        // also work for unrestricted meshes
+        BOUNDARY_TYPE bval = TopologicalRegularGrid::boundaryValue (cellid);
+        if (m_restriction == nullptr) { return bval;                                                        }
+        else {                          return bval + (m_restriction->GetLabel (cellid) * (maxDim()+1));    }
+    }
+};
+}   // end of namespace
 #endif
