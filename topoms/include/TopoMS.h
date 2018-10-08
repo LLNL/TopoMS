@@ -84,7 +84,7 @@ purposes.
 #include "Material.h"
 #include "InputFormats.h"
 #include "MSCBond.h"
-
+#include "version.h"
 /// -----------------------------------------------------------------------
 /// Forward declaration of the required components of MSC library
 /// -----------------------------------------------------------------------
@@ -243,7 +243,7 @@ public:
                    m_kdtree_minima(0), m_kdtree_atoms(0),
                    persistence_val(1.0), filter_val(1.0),
                    m_slicer_function(0), m_slicer_label(0), slice_labels(1) {
-        std::cout << "\n TopoMS v1.0\n\n";
+        std::cout << "\n TopoMS v" << TOPOMS_VERSION_STR << " [released on " << TOPOMS_VERSION_RELEASE_DATE << "]\n\n";
     }
 
     bool load(const std::string &configfilename, std::string datafile = "");
