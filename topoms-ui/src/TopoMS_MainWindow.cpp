@@ -256,7 +256,6 @@ END OF TERMS AND CONDITIONS
  *  @file    TopoMS_MainWindow.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the functionality for ui app
  *
@@ -270,8 +269,11 @@ END OF TERMS AND CONDITIONS
 #include "TopoMS_Viewer.h"
 #include "TopoMS_MainWindow.h"
 #include "TransferFunctionEditor.h"
-#include "vtkVolumeSlicer.h"
 
+#ifdef USE_VTK
+#include "vtkVolumeSlicer.h"
+#include "vtkDataArray.h"
+#endif
 // -----------------------------------------------------------------------------
 // ui callbacks
 // -----------------------------------------------------------------------------
@@ -323,11 +325,6 @@ void TopoMSApp::on_pb_updateGraph_clicked() {
 
     filterval_chngd = false;
     persval_chngd = false;
-    this->m_viewer->updateGL();
-}
-
-void TopoMSApp::on_cb_slicelog_toggled(bool val) {
-    m_viewer->draw_vtiSlice(this->m_mdlayer->m_slicer_function->slice(), val);
     this->m_viewer->updateGL();
 }
 
@@ -385,12 +382,61 @@ void TopoMSApp::update_vol_rendering() {
 
     m_viewer->updateGL();
 }
+void TopoMSApp::update_slice(const vtkDataArray *data, std::vector<float> &values) {
+
+    values.clear();
+
+#ifdef USE_VTK
+    const bool do_labels = (data->GetDataType() == VTK_INT);
+    const bool do_log = (!do_labels && ui.cb_slicelog->isChecked());
+    const size_t nvals = data->GetNumberOfValues();
+
+
+    values.reserve(nvals);
+    if (do_labels) {
+        for(size_t i = 0; i < nvals; i++) {
+
+            float value = float (data->GetComponent(i, 0));
+            if (value < 0)
+                continue;
+            values.push_back(value);
+        }
+    }
+    else {
+
+        const FLOATTYPE l = m_mdlayer->m_negated ? -1.0 : 1.0;
+
+        if (do_log) {
+            for(size_t i = 0; i < nvals; i++) {
+
+                float value = float (data->GetComponent(i, 0));
+                if (std::isnan(value))
+                    continue;
+
+                values.push_back( std::log10(1.0 + l*value));
+            }
+        }
+        else {
+            for(size_t i = 0; i < nvals; i++) {
+
+                float value = float (data->GetComponent(i, 0));
+                if (std::isnan(value))
+                    continue;
+
+                values.push_back(l*value);
+            }
+        }
+    }
+#endif
+    m_surtf_plot->set_function(values);
+    m_surtf_plot->set_histogram(128);
+    m_surtf_plot->replot();
+}
 
 void TopoMSApp::update_tfunc_vol() {
     m_viewer->set_volrendTransferFunction(m_voltf_plot->tfunc, m_voltf_plot->tfsize);
     m_viewer->updateGL();
 }
-
 void TopoMSApp::update_tfunc_surf() {
     m_viewer->set_sliceTransferFunction(m_surtf_plot->tfunc, m_surtf_plot->tfsize);
     m_viewer->updateGL();
@@ -493,11 +539,12 @@ bool TopoMSApp::initialize(QString configfilename) {
 
     bool msc_success = m_mdlayer->msc();
 
-    this->ui.groupBox_graph->setEnabled(msc_success);
-    this->ui.groupBox_topo->setEnabled(msc_success);
 
-#if 0
-    {
+    if (msc_success){
+
+        this->ui.groupBox_graph->setEnabled(msc_success);
+        this->ui.groupBox_topo->setEnabled(msc_success);
+
         m_surtf_plot = new TFEditor("Surface Transfer Function");
         if (this->m_mdlayer->m_config->tfpath.length() == 0) {
             m_surtf_plot->init_tfunc();
@@ -506,10 +553,10 @@ bool TopoMSApp::initialize(QString configfilename) {
             m_surtf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
         }
 
-        QObject::connect(m_surtf_plot, SIGNAL(tfunc_updated()), this, SLOT(surtfunc_updated()));
+        update_tfunc_surf();
+        QObject::connect(m_surtf_plot, SIGNAL(tfunc_updated()), this, SLOT(update_tfunc_surf()));
         m_surtf_plot->show();
     }
-#endif
 
     // ------------------------------------------------------------------------
     this->show();

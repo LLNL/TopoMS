@@ -73,6 +73,7 @@ purposes.
 #ifndef _MLINEARINTERP_H_
 #define _MLINEARINTERP_H_
 
+#include <cmath>
 #include <vector>
 #include <cstdlib>
 

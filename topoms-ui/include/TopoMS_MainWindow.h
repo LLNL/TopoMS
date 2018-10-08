@@ -257,7 +257,6 @@ END OF TERMS AND CONDITIONS
  *  @file    TopoMS_MainWindow.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the functionality for ui app
  *
@@ -278,6 +277,7 @@ END OF TERMS AND CONDITIONS
 
 class TopoMS;
 class TFEditor;
+class vtkDataArray;
 
 #include "TopoMS_Viewer.h"
 
@@ -308,7 +308,6 @@ public:
 
     TopoMSApp();
     bool initialize(QString configfilename);
-
 
     // ----------------------------------------------------------------------------
     // ui related queries
@@ -346,12 +345,16 @@ public:
     }
 
     bool show_saddleSlice() const {     return ui.cb_saddleSlice->isChecked();  }
-    bool show_volRendering() const {    return ui.cb_volume->isChecked();      }
+    bool show_volRendering() const {    return ui.cb_volume->isChecked();       }
+
+    bool slicelog() const {             return ui.cb_slicelog->isChecked();     }
     float val_sslider() const {         return ui.sslider->value();             }
 
     // update labels on the ui
     void update_plabels();
     void update_vol_rendering();
+    void update_slice(const vtkDataArray *slice, std::vector<float> &values);
+
 
 public slots:
 
@@ -395,8 +398,8 @@ public slots:
     void on_cb_volumelog_toggled(bool){     update_vol_rendering();     }
     void on_cb_volume_toggled(bool){        update_vol_rendering();     }
 
-    void on_cb_slicelog_toggled(bool);
-    //void on_cb_saddleSlice_toggled(bool){}
+    void on_cb_slicelog_toggled(bool) {     m_viewer->updateGL();       }
+    void on_cb_saddleSlice_toggled(bool){   m_viewer->updateGL();       }
     void on_sslider_valueChanged(int){      m_viewer->updateGL();       }
 };
 

@@ -60,7 +60,6 @@ purposes.
  *  @file    TopoMS-vtk.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the vtk functionality for TopoMS
  *
@@ -75,35 +74,33 @@ purposes.
 #include <string>
 
 #include "MultilinearInterpolator.h"
-#include "TopoMS.h"
 #include "MSCBond.h"
-
-typedef unsigned int uint;
+#include "TopoMS.h"
 
 // vtk headers
 #ifdef USE_VTK
-    #include <vtkSmartPointer.h>
-    #include <vtkDataArray.h>
-    #include <vtkIntArray.h>
-    #include <vtkFloatArray.h>
-    #include <vtkDoubleArray.h>
-    #include <vtkMatrix4x4.h>
-    #include <vtkPoints.h>
-    #include <vtkVertex.h>
-    #include <vtkPolyLine.h>
-    #include <vtkCellArray.h>
-    #include <vtkPointData.h>
-    #include <vtkCellData.h>
-    #include <vtkFieldData.h>
-    #include <vtkPolyData.h>
-    #include <vtkImageData.h>
-    #include <vtkImageReslice.h>
-    #include <vtkMarchingCubes.h>
-    #include <vtkColorTransferFunction.h>
-    #include <vtkXMLPolyDataWriter.h>
-    #include <vtkXMLImageDataWriter.h>
+#include <vtkSmartPointer.h>
+#include <vtkDataArray.h>
+#include <vtkIntArray.h>
+#include <vtkFloatArray.h>
+#include <vtkDoubleArray.h>
+#include <vtkMatrix4x4.h>
+#include <vtkPoints.h>
+#include <vtkVertex.h>
+#include <vtkPolyLine.h>
+#include <vtkCellArray.h>
+#include <vtkPointData.h>
+#include <vtkCellData.h>
+#include <vtkFieldData.h>
+#include <vtkPolyData.h>
+#include <vtkImageData.h>
+#include <vtkImageReslice.h>
+#include <vtkMarchingCubes.h>
+#include <vtkColorTransferFunction.h>
+#include <vtkXMLPolyDataWriter.h>
+#include <vtkXMLImageDataWriter.h>
 
-    #include "vtkVolumeSlicer.h"
+#include "vtkVolumeSlicer.h"
 #endif
 
 /// --------------------------------------------------------------------------------------
@@ -331,10 +328,6 @@ vtkImageData* TopoMS::create_vtkImagedata(const std::string &fname) const {
         int* pixel = static_cast<int*>(vdata->GetScalarPointer(x,y,z));
         pixel[0] = bader_get_atomLabeling(x,y,z);
     }}}
-
-    //double vrng [2];
-    //vdata->GetPointData()->GetScalars()->GetRange(vrng);
-    //printf(" Created vtk volume! Vol range: [%f %f]\n",vrng[0], vrng[1]);
     return vdata;
 }
 
@@ -378,14 +371,13 @@ void TopoMS::compute_slice(const MSC::Vec3d &origin, const std::vector<MSC::Vec3
 bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &atomids, bool overwrite = false) const {
 
     // set nan for any pixel that does not have atomids as its label
-
-    unsigned int n = slicer->slice()->GetNumberOfPoints();
+    size_t n = slicer->slice()->GetNumberOfPoints();
     const int *vdims = slicer->volume()->GetDimensions();
     const size_t gdims[3] = {vdims[0], vdims[1], vdims[2]};
 
     double pnt2d[3], pnt3d[3];
 
-    for(unsigned int i = 0; i < n; i++) {
+    for(size_t i = 0; i < n; i++) {
 
         float value = slicer->slice()->GetPointData()->GetScalars()->GetComponent(i, 0);
         if(std::isnan(value)) {
@@ -397,7 +389,7 @@ bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &at
         slicer->transform(pnt2d, pnt3d);
 
         // wrap periodic points and set the correct value
-        for(unsigned d = 0; d < 3; d++) {
+        for(uint8_t d = 0; d < 3; d++) {
             if (pnt3d[d] < 0)               pnt3d[d] += gdims[d];
             else if (pnt3d[d] >= gdims[d])  pnt3d[d] -= gdims[d];
         }
@@ -414,10 +406,12 @@ bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &at
         // use periodic value
         value = MultilinearInterpolator::trilinear_interpolation(pnt3d, m_func, gdims);
 
+        // filter out vaccum
         int atomIdx = (fabs(value) <= vacthreshold_in_fileUnits) ? 0 : this->bader_get_atomLabeling(pnt3d);
 
+        // filter out the pixels outside these atomic regions
         if (std::find(atomids.begin(), atomids.end(), atomIdx) == atomids.end()) {
-            if (slicer->slice()->GetPointData()->GetScalars()->GetDataType() == VTK_INT) {
+            if (this->slice_labels) {
                 slicer->slice()->GetPointData()->GetScalars()->SetComponent(i, 0, -1);
             }
             else {
@@ -426,8 +420,15 @@ bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &at
             continue;
         }
 
-        if (overwrite)
-            slicer->slice()->GetPointData()->GetScalars()->SetComponent(i, 0, atomIdx);
+        // finally, if this pixel persists, overwrite the correct value
+        if (overwrite) {
+            if (this->slice_labels) {
+                slicer->slice()->GetPointData()->GetScalars()->SetComponent(i, 0, atomIdx);
+            }
+            else {
+                slicer->slice()->GetPointData()->GetScalars()->SetComponent(i, 0, value);
+            }
+        }
     }
 }
 
@@ -439,13 +440,13 @@ std::pair<double, double> TopoMS::integrate_slice(const vtkVolumeSlicer *slicer,
     Utils::Kahan::KahanObject<FLOATTYPE> kchg_slice = {0};
 
     // now, just go over all points and integrate
-    unsigned int n = slicer->slice()->GetNumberOfPoints();
+    size_t n = slicer->slice()->GetNumberOfPoints();
     const int *vdims = slicer->volume()->GetDimensions();
     const size_t gdims[3] = {vdims[0], vdims[1], vdims[2]};
 
     double pnt2d[3], pnt3d[3];
 
-    for(unsigned int i = 0; i < n; i++) {
+    for(size_t i = 0; i < n; i++) {
 
         float value = slicer->slice()->GetPointData()->GetScalars()->GetComponent(i, 0);
         if(std::isnan(value)) {
@@ -456,7 +457,7 @@ std::pair<double, double> TopoMS::integrate_slice(const vtkVolumeSlicer *slicer,
         slicer->transform(pnt2d, pnt3d);
 
         // wrap periodic points and set the correct value
-        for(unsigned d = 0; d < 3; d++) {
+        for(uint8_t d = 0; d < 3; d++) {
 
             if (pnt3d[d] < 0)                pnt3d[d] += gdims[d];
             else if (pnt3d[d] >= gdims[d])   pnt3d[d] -= gdims[d];
@@ -483,14 +484,70 @@ std::pair<double, double> TopoMS::integrate_slice(const vtkVolumeSlicer *slicer,
     if (this->m_negated)    ifunc *= -1;
     return std::pair<double, double>(iarea, ifunc);
 }
-
 #endif
 
+/// --------------------------------------------------------------------------------------
+/**
+  *   @brief  Compute a 2D slice through a given saddle and parameterized bond path
+  */
+bool TopoMS::refresh_orthogonalSlice(int saddleNodeId, int param=0, int minp=-100, int maxp=100) {
+
+#ifndef USE_VTK
+    printf("TopoMS::refresh_orthogonalSlice. VTK not available\n");
+    return false;
+#else
+
+    // identify the saddle
+    int ndim;
+    INDEX_TYPE ncidx;
+    MSC::Vec3d ncoord;
+
+    this->msc_get_node(saddleNodeId, ndim, ncidx, ncoord);
+
+    // only look at 1-saddles and 2-saddles
+    if(1 != ndim && 2 != ndim){
+        return false;
+    }
+
+    const MSCBond &bond = this->m_mscbonds[saddleNodeId];
+    if (!bond.check2()){
+        return false;
+    }
+
+    MSC::Vec3d origin;
+    std::vector<MSC::Vec3d> nbrs;
+    nbrs.reserve(2);
+
+    const size_t gdims[3] = {gdims[0],gdims[1],gdims[2]};
+
+    if (param == 0) {
+        bond.get_points_idx(origin, nbrs, gdims, int(-1));
+    }
+    else {
+        float p = 0.0;
+        if (param < 0)          p = -1.0 * float(param) / float(minp);
+        else if (param > 0)     p = float(param) / float(maxp);
+
+        bond.get_points(origin, nbrs, gdims, p);
+    }
+
+    vtkVolumeSlicer *cslicer = slicer();
+
+    this->compute_slice(origin, nbrs, cslicer);
+    this->filter_slice(cslicer, bond.atomIds, true);
+    return true;
+#endif
+}
+
+/// --------------------------------------------------------------------------------------
 /**
   *   @brief  Gather statistics of Bader areas along orthogonal slices
   */
 void TopoMS::compute_baderAreas() {
 
+#ifndef USE_VTK
+    printf("TopoMS::compute_baderAreas. VTK not available\n");
+#else
     // create a slicer
     // for each saddle
     // compute for each point along the path
@@ -556,61 +613,12 @@ void TopoMS::compute_baderAreas() {
     }
     printf(" Done!\n");
     delete slicer;
+#endif
 }
+
+
 
 /// --------------------------------------------------------------------------------------
-/**
-  *   @brief  Compute a 2D slice through a given saddle and parameterized bond path
-  */
-void TopoMS::refresh_orthogonalSlice(int saddleNodeId, int param=0, int minp=-100, int maxp=100) {
-
-#ifndef USE_VTK
-    printf("TopoMS::refresh_orthogonalSlice. VTK not available\n");
-#else
-
-    // ----------------------------------------------------------------------
-    // identify the saddle
-    int ndim;
-    INDEX_TYPE ncidx;
-    MSC::Vec3d ncoord;
-
-    this->msc_get_node(saddleNodeId, ndim, ncidx, ncoord);
-    if(2 != ndim){
-        return;
-    }
-
-    const MSCBond &bond = this->m_mscbonds[saddleNodeId];
-    if (!bond.check2())
-        return;
-
-    MSC::Vec3d origin;
-    std::vector<MSC::Vec3d> nbrs;
-    nbrs.reserve(2);
-
-    const size_t gdims[3] = {gdims[0],gdims[1],gdims[2]};
-
-
-    if (param == 0) {
-        bond.get_points_idx(origin, nbrs, gdims, int(-1));
-    }
-    else {
-        float p = 0.0;
-        if (param < 0)          p = -1.0 * float(param) / float(minp);
-        else if (param > 0)     p = float(param) / float(maxp);
-
-        bond.get_points(origin, nbrs, gdims, p);
-    }
-
-    vtkVolumeSlicer *slicer = (slice_labels) ? m_slicer_label : m_slicer_function;
-
-    this->compute_slice(origin, nbrs, slicer);
-    this->filter_slice(slicer, bond.atomIds, true);
-#endif
-    // ----------------------------------------------------------------------
-}
-
-
-
 /// --------------------------------------------------------------------------------------
 
 

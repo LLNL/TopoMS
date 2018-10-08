@@ -72,6 +72,7 @@ purposes.
 
 #include <map>
 #include <utility>
+#include <algorithm>
 
 #include "MSCBond.h"
 #include "MultilinearInterpolator.h"

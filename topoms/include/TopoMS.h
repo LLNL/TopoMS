@@ -181,8 +181,10 @@ private:
     FLOATTYPE *m_func;
 
 #ifdef USE_VTK
-    vtkImageData *m_vtkFunction, *m_vtkVolLabeling;
+    vtkImageData *m_vtkFunction;
+    vtkImageData *m_vtkVolLabeling;
 #endif
+
     // bader-related variables
     std::vector<FLOATTYPE> chg_atoms, vol_atoms;
     std::vector<FLOATTYPE> chg_extrema, vol_extrema;
@@ -230,7 +232,11 @@ public:
 #ifdef USE_VTK
     vtkVolumeSlicer *m_slicer_function;
     vtkVolumeSlicer *m_slicer_label;
+
+    vtkVolumeSlicer* slicer() { return (slice_labels) ? m_slicer_label : m_slicer_function; }
+    bool slice_color_by_label() const { return slice_labels;                                }
 #endif
+
 
     std::map<INT_TYPE, MSCBond> m_mscbonds;
 
@@ -241,8 +247,11 @@ public:
                    m_grid(0), m_tgrid(0), m_func(0), m_gridfunc(0), m_topofunc(0),
                    m_integrator(0), m_integrator2(0), m_msc(0),
                    m_kdtree_minima(0), m_kdtree_atoms(0),
-                   persistence_val(1.0), filter_val(1.0),
-                   m_slicer_function(0), m_slicer_label(0), slice_labels(1) {
+                   persistence_val(1.0), filter_val(1.0)
+#ifdef USE_VTK
+                   , m_slicer_function(0), m_slicer_label(0), slice_labels(0)
+#endif
+    {
         std::cout << "\n TopoMS v" << TOPOMS_VERSION_STR << " [released on " << TOPOMS_VERSION_RELEASE_DATE << "]\n\n";
     }
 
@@ -338,7 +347,7 @@ public:
     void msc_gcoords_to_wcoords(const MSC::Vec3d &ncoords, float wcoords[]) const;
     void msc_print_node(size_t idx) const;
 
-    void refresh_orthogonalSlice(int saddleNodeId, int param=0, int minp=-100, int maxp=100);
+    bool refresh_orthogonalSlice(int saddleNodeId, int param=0, int minp=-100, int maxp=100);
 
 private:
     // ----------------------------------------------------------------------

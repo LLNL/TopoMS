@@ -257,7 +257,6 @@ END OF TERMS AND CONDITIONS
  *  @file    TopoMS_Viewer.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the functionality for the 3D TopoMS viewer
  *
@@ -311,26 +310,15 @@ class TopoMSViewer : public QGLViewer {
 
 public:
 
-    // -------------------------------------------------------
+    // -------------------------------------------------------------------------
+
     TopoMSViewer(QWidget *parent);
+
+    void printGLStatus();
 
     // to support QGLViewer 2.7.1
     void updateGL(){  this->update(); }
 
-    void set_volrendFunction(float *f, int X, int Y, int Z) {
-        vsvr->tex_set_resolution(X, Y, Z);
-        vsvr->tex_set_extern(f);
-    }
-    void set_volrendTransferFunction(float *tfunc, size_t tfsize) {
-        vsvr->tf_set_size(tfsize);
-        vsvr->tf_set_extern(tfunc);
-    }
-    void set_volrendFunction(float *f) {
-        vsvr->tex_set_resolution(grid_dims[0], grid_dims[1], grid_dims[2]);
-        vsvr->tex_set_extern(f);
-    }
-
-    void set_sliceTransferFunction(float *tfunc, size_t tfsize);
     void set_lattice(const Mat3<double> &lattice_mat, const Vec3<double> &origin, const Vec3<size_t> grid) {
 
         for(uint8_t i = 0; i < 3; i++){
@@ -353,17 +341,31 @@ public:
         set_bbox(bbox_min, bbox_max);
     }
 
-    void printGLStatus();
+    void set_volrendFunction(float *f, int X, int Y, int Z) {
+        vsvr->tex_set_resolution(X, Y, Z);
+        vsvr->tex_set_extern(f);
+    }
+    void set_volrendTransferFunction(float *tfunc, size_t tfsize) {
+        vsvr->tf_set_size(tfsize);
+        vsvr->tf_set_extern(tfunc);
+    }
+    void set_volrendFunction(float *f) {
+        vsvr->tex_set_resolution(grid_dims[0], grid_dims[1], grid_dims[2]);
+        vsvr->tex_set_extern(f);
+    }
+
+    void set_sliceTransferFunction(float *tfunc, size_t tfsize);
+
     void create_tubes();
 
-    void draw_vtiSlice(vtkImageData *vtiSlice, const bool do_log = false) ;
+    void draw_vtiSlice(vtkImageData *vtiSlice) ;
 
 private:
-    // -------------------------------------------------------
+    // -------------------------------------------------------------------------
     void set_bbox(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max);
 
+    // -------------------------------------------------------------------------
     bool show_3x3(const qglviewer::Vec &pos) const;
-
     void render_volume();
     void draw_extrema();
     void draw_atoms(bool with_names);
@@ -399,13 +401,11 @@ private:
 
 protected slots:
     virtual void init();
-
     virtual void draw();
     virtual void drawWithNames();
-
-    //virtual QString helpString() const;
     virtual void postSelection(const QPoint& point);
-    virtual void keyPressEvent(QKeyEvent* event);
+    virtual void keyPressEvent(QKeyEvent* event);   
+    //virtual QString helpString() const;
 };
 
 #endif

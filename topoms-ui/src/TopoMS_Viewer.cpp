@@ -417,14 +417,6 @@ void TopoMSViewer::render_volume () {
     static const int g_numslices = 256;
     static bool b_forceRender = true;
 
-    glPushMatrix();
-
-    static float scaling[3] = {-1,-1,-1};
-    if(scaling[0] < 0){
-        parentApp->m_mdlayer->m_metadata.world_to_grid_cuboid_lattice(scaling);
-    }
-    glScalef(scaling[0], scaling[1], scaling[2]);
-
     if (b_forceRender) {
         vsvr->gl_render( g_numslices);          // Redraws from scratch
         //b_forceRender = false;
@@ -432,9 +424,7 @@ void TopoMSViewer::render_volume () {
     else {
         vsvr->gl_redisplay(g_numslices);        // Redraws from display list
     }
-    glPopMatrix();
 }
-
 
 bool TopoMSViewer::show_3x3(const qglviewer::Vec &pos) const {
 
@@ -720,7 +710,18 @@ void TopoMSViewer::draw() {
 
         // orthogonal slicing along saddle
         if (parentApp->show_saddleSlice()) {
+
+            glPushMatrix();
+
+            static float scaling[3] = {-1,-1,-1};
+            if(scaling[0] < 0){
+                parentApp->m_mdlayer->m_metadata.world_to_grid_cuboid_lattice(scaling);
+            }
+            glScalef(scaling[0], scaling[1], scaling[2]);
+
             draw_saddleSlice();
+
+            glPopMatrix();
         }
 
         glPopMatrix();
@@ -730,7 +731,18 @@ void TopoMSViewer::draw() {
 
     // do the volume rendering only once
     if(parentApp->show_volRendering()){
+
+        glPushMatrix();
+
+        static float scaling[3] = {-1,-1,-1};
+        if(scaling[0] < 0){
+            parentApp->m_mdlayer->m_metadata.world_to_grid_cuboid_lattice(scaling);
+        }
+        glScalef(scaling[0], scaling[1], scaling[2]);
+
         render_volume();
+
+        glPopMatrix();
     }
 }
 
@@ -760,7 +772,7 @@ void TopoMSViewer::set_sliceTransferFunction(float *tfunc, size_t tfsize) {
     m_vtkSliceTf = vtkDiscretizableColorTransferFunction::New();
 #if 1
     float factor = 1.0 / float(tfsize-1);
-    for(uint i = 0; i < tfsize; i++) {
+    for(size_t i = 0; i < tfsize; i++) {
         m_vtkSliceTf->AddRGBPoint( float(i)*factor, tfunc[4*i], tfunc[4*i+1], tfunc[4*i+2]);
     }
 #else
@@ -773,7 +785,7 @@ void TopoMSViewer::set_sliceTransferFunction(float *tfunc, size_t tfsize) {
 #endif
 }
 
-void TopoMSViewer::draw_vtiSlice(vtkImageData *vtiSlice, const bool do_log) {
+void TopoMSViewer::draw_vtiSlice(vtkImageData *vtiSlice) {
 
 #ifdef USE_VTK
 #if 0
@@ -786,20 +798,26 @@ void TopoMSViewer::draw_vtiSlice(vtkImageData *vtiSlice, const bool do_log) {
 #endif
 
     // data
-    vtkDoubleArray *scalarData = (vtkDoubleArray*) vtiSlice->GetPointData()->GetScalars();
-    double *scalarRange = scalarData->GetRange();
+    const vtkDoubleArray *scalarData = (vtkDoubleArray*) vtiSlice->GetPointData()->GetScalars();
 
-    if (do_log) {
-        scalarRange[0] = std::log10(1.0 + scalarRange[0]);
-        scalarRange[1] = std::log10(1.0 + scalarRange[1]);
-    }
-    double scalarFactor = 1.0 / (scalarRange[1] - scalarRange[0]);
+    const bool do_labels = scalarData->GetDataType() == VTK_INT;
+    const bool do_log = !do_labels && parentApp->slicelog();
+    const FLOATTYPE l = parentApp->m_mdlayer->m_negated ? -1.0 : 1.0;
+
+    // update the transfer function
+    std::vector<float> values;
+    parentApp->update_slice(scalarData, values);
+
+    double vmin = *std::min_element(values.begin(), values.end());
+    double vmax = *std::max_element(values.begin(), values.end());
+    double vrng = 1.0 / (vmax - vmin);
 
     glColor3f(1,0,0);
     glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
     glDisable(GL_CULL_FACE);
 
     std::set<vtkIdType> fpoints;
+
     // --------------------------------------------------------------------------
     // draw all quads
     uint8_t qorder[4] = {0,1,3,2};
@@ -809,23 +827,22 @@ void TopoMSViewer::draw_vtiSlice(vtkImageData *vtiSlice, const bool do_log) {
     bool      zVals[4];
     double pnt[3], col[3];
 
-    int dtype = vtiSlice->GetPointData()->GetScalars()->GetDataType() ;
-
     glBegin(GL_QUADS);
     for(vtkIdType cellIdx = 0; cellIdx < vtiSlice->GetNumberOfCells(); cellIdx++) {
 
         vtkCell *cell = vtiSlice->GetCell(cellIdx);
-        if( 4 != cell->GetNumberOfPoints() ){
+        if(4 != cell->GetNumberOfPoints()){
             continue;
         }
 
         // all 4 points indices
         for(uint8_t i = 0; i < 4; i++) {
+
             ptIdxs[i] = cell->GetPointId(i);
             ptVals[i] = scalarData->GetComponent(ptIdxs[i], 0);
 
             // for labels, invalid values are -1
-            zVals[i] = (dtype == VTK_INT) ? (ptVals[i] + 1) < 0.00001 : std::isnan(ptVals[i]);
+            zVals[i] = do_labels ? ptVals[i] < 0 : std::isnan(ptVals[i]);
         }
 
         // if all values are outside the domain
@@ -846,12 +863,12 @@ void TopoMSViewer::draw_vtiSlice(vtkImageData *vtiSlice, const bool do_log) {
 
             uint8_t q = qorder[i];
 
-            if (do_log) {
-                ptVals[q] = std::log10(1.0 + ptVals[q]);
+            if (!do_labels && do_log) {
+                ptVals[q] = std::log10(1.0 + l*ptVals[q]);
             }
 
             fpoints.insert(ptIdxs[i]);
-            ptVals[q] = (ptVals[q] - scalarRange[0]) * scalarFactor;
+            ptVals[q] = (ptVals[q] - vmin) * vrng;
 
             vtiSlice->GetPoint(ptIdxs[q], pnt);
             m_vtkSliceTf->GetColor(ptVals[q], col);
@@ -861,21 +878,6 @@ void TopoMSViewer::draw_vtiSlice(vtkImageData *vtiSlice, const bool do_log) {
         }
     }
     glEnd();
-
-
-    // ---------------------------------------------------------
-    std::vector<float> fvals;
-    fvals.reserve(fpoints.size());
-    for(auto iter = fpoints.begin(); iter != fpoints.end(); iter++){
-        float val = scalarData->GetComponent(*iter, 0);
-        if (do_log) {
-            val = std::log10(1.0 + val);
-        }
-        fvals.push_back(val);
-    }
-
-    this->parentApp->m_surtf_plot->set_function(fvals);
-    this->parentApp->m_surtf_plot->set_histogram(128);
 #endif
 }
 
@@ -891,20 +893,12 @@ void TopoMSViewer::draw_saddleSlice() {
     }
 
     int idx = *this->selectedNodes.rbegin();
-
-    int ndim;
-    INDEX_TYPE ncidx;
-    MSC::Vec3d ncoord;
-
-    this->parentApp->m_mdlayer->msc_get_node(idx, ndim, ncidx, ncoord);
-    if(2 != ndim){
+    bool success = parentApp->m_mdlayer->refresh_orthogonalSlice(idx, this->parentApp->val_sslider());
+    if (!success)
         return;
-    }
-
-    parentApp->m_mdlayer->refresh_orthogonalSlice(idx, this->parentApp->val_sslider());
 
     double mat[16];
-    vtkVolumeSlicer *slicer = (parentApp->m_mdlayer->slice_labels) ? parentApp->m_mdlayer->m_slicer_label : parentApp->m_mdlayer->m_slicer_function;
+    vtkVolumeSlicer *slicer = parentApp->m_mdlayer->slicer();
     slicer->matrix(mat);
 
     glPushMatrix();
@@ -1234,7 +1228,7 @@ void TopoMSViewer::draw_bConvexHull(const std::vector<const float*> &corners){
 void TopoMSViewer::postSelection(const QPoint &point) {
 
     int sname = this->selectedName();
-    printf(" postSelection (%d) ", sname);
+    printf(" > postSelection (%d) ", sname);
 
     if(sname == -1){
         printf("\n");

@@ -10,7 +10,7 @@
     <x>0</x>
     <y>0</y>
     <width>1160</width>
-    <height>851</height>
+    <height>871</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -356,7 +356,7 @@
      </widget>
      <widget class="QCheckBox" name="cb_slicelog">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -375,7 +375,7 @@
      </widget>
      <widget class="QCheckBox" name="cb_saddleSlice">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -394,7 +394,7 @@
      </widget>
      <widget class="QLabel" name="label_minval_4">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -413,7 +413,7 @@
      </widget>
      <widget class="QSlider" name="sslider">
       <property name="enabled">
-       <bool>false</bool>
+       <bool>true</bool>
       </property>
       <property name="geometry">
        <rect>
