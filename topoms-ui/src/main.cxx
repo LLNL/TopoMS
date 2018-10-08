@@ -258,7 +258,7 @@ END OF TERMS AND CONDITIONS
 
 int main(int argc, char** argv){
 
-    if(argc != 2){
+    if(argc != 1 && argc != 2){
         printf(" Usage: %s <config_file>\n", argv[0]);
         return 1;
     }
@@ -269,7 +269,8 @@ int main(int argc, char** argv){
     QApplication application(argc,argv);
 
     TopoMSApp mdapp;
-    mdapp.initialize(argv[1]);
+    if (argc == 2)
+        mdapp.initialize(argv[1]);
 
     // Run main loop.
     return application.exec();

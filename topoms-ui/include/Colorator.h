@@ -290,13 +290,15 @@ public:
         if (symbol.compare("C") == 0)   return QColor::fromHsv(210, 170, 255);
         if (symbol.compare("H") == 0)   return QColor::fromHsv(300, 170, 255);
 
-        if(symbol.compare("C") == 0)           h = 60;
+             if(symbol.compare("C") == 0)      h = 60;
         else if(symbol.compare("O") == 0)      h = 120;
         else if(symbol.compare("H") == 0)      h = 180;
         else if(symbol.compare("P") == 0)      h = 240;
         else if(symbol.compare("F") == 0)      h = 280;
         else if(symbol.compare("B") == 0)      h = 100;
         else if(symbol.compare("Li") == 0)     h = 320;
+        else if(symbol.compare("Ca") == 0)     h = 320;
+        else if(symbol.compare("Cl") == 0)     h = 250;
 
         return QColor::fromHsv(h,s,v);
     }

@@ -293,18 +293,18 @@ class TopoMSApp : public QMainWindow {
 
 private:
 
+    Ui::TopoMSUI ui;
     TopoMSViewer *m_viewer;
-    float *m_funcVol, m_funcSlice;
 
+    bool filterval_chngd, persval_chngd;
+
+    float *m_funcVol;
     TFEditor *m_voltf_plot;
 
 public:
 
     TFEditor *m_surtf_plot;     // public because the viewer will update this
-    TopoMS *m_mdlayer;
-    Ui::TopoMSUI ui;
-
-    bool filterval_chngd, persval_chngd;
+    TopoMS *m_mdlayer;          // public to avoid creating many interface functions
 
     TopoMSApp();
     bool initialize(QString configfilename);
@@ -312,23 +312,17 @@ public:
 
     // ----------------------------------------------------------------------------
     // ui related queries
-    void update_plabels();
 
-    bool show_saddleSlice() const {     return ui.cb_saddleSlice->isChecked();  }
-    bool show_volRendering() const {    return ui.cb_volRend->isChecked();      }
+    float show_3x3() const {            return ui.cb_show3x3->isChecked();      }
+    float scale_atom() const {          return ui.dsb_atom->value();            }
+    float scale_bader() const {         return ui.dsb_bader->value();           }
+    float scale_nodes() const {         return ui.dsb_nodes->value();           }
 
     bool show_atoms() const {           return ui.cb_showAtoms->isChecked();    }
     bool show_extrema() const {         return ui.cb_extrema->isChecked();      }
+    bool show_mpaths() const {          return ui.cb_mpaths->isChecked();       }
+    bool show_mnodes() const {          return ui.cb_mnodes->isChecked();       }
 
-    bool show_mpaths() const {           return ui.cb_mpaths->isChecked();        }
-    bool show_mnodes() const {           return ui.cb_mnodes->isChecked();        }
-
-    bool show_tnodes() const {
-        return show_topology(0)||show_topology(1)||show_topology(2)||show_topology(3);
-    }
-    bool show_tarcs() const {
-        return show_topology(4)||show_topology(5)||show_topology(6);
-    }
     bool show_topology(int idx) const {
 
         switch (idx) {
@@ -344,19 +338,47 @@ public:
         return false;
     }
 
-    float scale_atom() const {  return ui.dsb_atom->value();        }
-    float scale_cp() const {    return 0.25*ui.dsb_cp->value();     }
+    bool show_tnodes() const {
+        return show_topology(0)||show_topology(1)||show_topology(2)||show_topology(3);
+    }
+    bool show_tarcs() const {
+        return show_topology(4)||show_topology(5)||show_topology(6);
+    }
+
+    bool show_saddleSlice() const {     return ui.cb_saddleSlice->isChecked();  }
+    bool show_volRendering() const {    return ui.cb_volume->isChecked();      }
+    float val_sslider() const {         return ui.sslider->value();             }
+
+    // update labels on the ui
+    void update_plabels();
+    void update_vol_rendering();
 
 public slots:
 
-    void voltfunc_updated();
-    void surtfunc_updated();
+    // additional slots to update ui
+    void update_tfunc_vol();
+    void update_tfunc_surf();
 
-    void on_sslider_valueChanged(int){      m_viewer->updateGL();   }
+    // menu actions
+    void on_actionLoad_config_triggered();
+    void on_actionLoad_camera_triggered();
+    void on_actionSave_camera_triggered();
 
-    void on_cb_log_toggled(bool);
-    void on_cb_log2_toggled(bool);
-    void on_cb_volRend_toggled(bool){       m_viewer->updateGL();   }
+    // buttons
+    void on_pb_saveBader_clicked();
+    void on_pb_saveGraph_clicked();
+    void on_pb_updateGraph_clicked();
+
+    // spin boxes
+    void on_dsb_filterval_editingFinished(){    filterval_chngd = true; }
+    void on_dsb_persval_editingFinished(){      persval_chngd = true;   }
+
+    void on_dsb_atom_editingFinished(){         m_viewer->updateGL();   }
+    void on_dsb_bader_editingFinished(){        m_viewer->updateGL();   }
+    void on_dsb_nodes_editingFinished(){        m_viewer->updateGL();   }
+
+    // check box options
+    void on_cb_show3x3_toggled(bool){       m_viewer->updateGL();       }
     void on_cb_showAtoms_toggled(bool){     m_viewer->updateGL();   }
     void on_cb_extrema_toggled(bool){       m_viewer->updateGL();   }
     void on_cb_mnodes_toggled(bool){        m_viewer->updateGL();   }
@@ -369,15 +391,13 @@ public slots:
     void on_cb_arc2s1s_toggled(bool){       m_viewer->updateGL();   }
     void on_cb_arcm2s_toggled(bool){        m_viewer->updateGL();   }
 
-    void on_dsb_atom_editingFinished(){     m_viewer->updateGL();   }
-    void on_dsb_cp_editingFinished(){       m_viewer->updateGL();   }
 
-    void on_dsb_filterval_editingFinished(){    filterval_chngd = true; }
-    void on_dsb_persval_editingFinished(){      persval_chngd = true;   }
+    void on_cb_volumelog_toggled(bool){     update_vol_rendering();     }
+    void on_cb_volume_toggled(bool){        update_vol_rendering();     }
 
-    void on_pb_updateGraph_clicked();
-    void on_pb_saveGraph_clicked();
-    void on_pb_saveBader_clicked();
+    void on_cb_slicelog_toggled(bool);
+    //void on_cb_saddleSlice_toggled(bool){}
+    void on_sslider_valueChanged(int){      m_viewer->updateGL();       }
 };
 
 #endif

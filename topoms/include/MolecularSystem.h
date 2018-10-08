@@ -191,6 +191,11 @@ class SystemInfo {
             direct_to_grid(directc, out_gridc);
         }
 
+        inline void world_to_grid_cuboid_lattice(float out_grid[3]) const {
+            for(uint8_t i = 0; i < 3; i++)
+                out_grid[i] = m_lattice.v[i][i] / float(m_grid_dims[i]);
+        }
+
         inline void world_dims(float wdims[3]) const {
             float ddims[3] = {1,1,1};
             direct_to_world(ddims, wdims);

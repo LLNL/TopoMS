@@ -252,7 +252,6 @@ OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 END OF TERMS AND CONDITIONS
 */
 
-
 /**
  *  @file    TopoMS_MainWindow.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
@@ -268,18 +267,48 @@ END OF TERMS AND CONDITIONS
  */
 
 #include "TopoMS.h"
-#include "TopoMS_MainWindow.h"
 #include "TopoMS_Viewer.h"
+#include "TopoMS_MainWindow.h"
 #include "TransferFunctionEditor.h"
 #include "vtkVolumeSlicer.h"
 
-// -----------------------------------------------------------------
-void TopoMSApp::update_plabels() {
-    this->ui.dsb_persval->setValue( m_mdlayer->get_persistence() );
+// -----------------------------------------------------------------------------
+// ui callbacks
+// -----------------------------------------------------------------------------
+
+void TopoMSApp::on_actionLoad_config_triggered() {
+
+    QString fileName = QFileDialog::getOpenFileName(this,
+                                    tr("Load TopoMS config file"), "",
+                                    tr("Config files (*.conf *.config);;All Files (*)"));
+
+    if (fileName.length() == 0) return;
+    this->initialize(fileName);
+    ui.actionLoad_config->setEnabled(false);
 }
+void TopoMSApp::on_actionLoad_camera_triggered() {
+
+    QString fileName = QFileDialog::getOpenFileName(this,
+                                        tr("Load TopoMS camera state"), "",
+                                        tr("Camera files (*.xml);;All Files (*)"));
+
+    if (fileName.length() == 0) return;
+    this->m_viewer->setStateFileName(fileName);
+    this->m_viewer->restoreStateFromFile();
+}
+void TopoMSApp::on_actionSave_camera_triggered() {
+
+    QString fileName = QFileDialog::getSaveFileName(this,
+                                    tr("Save TopoMS camera state"), "",
+                                    tr("Camera files (*.xml);;All Files (*)"));
+
+    if (fileName.length() == 0) return;
+    this->m_viewer->setStateFileName(fileName);
+    this->m_viewer->saveStateToFile();
+}
+
 void TopoMSApp::on_pb_saveBader_clicked() {    m_mdlayer->write_bader();    }
 void TopoMSApp::on_pb_saveGraph_clicked() {    m_mdlayer->write_msc();      }
-
 void TopoMSApp::on_pb_updateGraph_clicked() {
 
     if (!persval_chngd && !filterval_chngd)
@@ -297,144 +326,193 @@ void TopoMSApp::on_pb_updateGraph_clicked() {
     this->m_viewer->updateGL();
 }
 
-void TopoMSApp::on_cb_log2_toggled(bool val) {
-    m_viewer->draw_vtiSlice(this->m_mdlayer->m_slicer_function->slice());
+void TopoMSApp::on_cb_slicelog_toggled(bool val) {
+    m_viewer->draw_vtiSlice(this->m_mdlayer->m_slicer_function->slice(), val);
     this->m_viewer->updateGL();
 }
-void TopoMSApp::on_cb_log_toggled(bool val) {
 
-    size_t fsz = m_mdlayer->get_gridSize();
-    const FLOATTYPE *func = m_mdlayer->get_func();
-    float l = m_mdlayer->m_negated ? -1.0 : 1.0;
+// -----------------------------------------------------------------------------
+// additional slots to update ui
+// -----------------------------------------------------------------------------
+void TopoMSApp::update_plabels() {
+    this->ui.dsb_persval->setValue( m_mdlayer->get_persistence() );
+}
 
-    // linear
-    if (!val) {
-        for(size_t i = 0; i < fsz; i++) {
-            m_funcVol[i] = l*func[i];
+void TopoMSApp::update_vol_rendering() {
+
+    const bool do_vol = ui.cb_volume->isChecked();
+    const bool do_log = ui.cb_volumelog->isChecked();
+    static bool curr_do_log = true;
+
+    const bool update_needed = (m_funcVol == nullptr) || (do_vol && (do_log != curr_do_log));
+
+    if (update_needed){
+
+        const size_t fsz = m_mdlayer->get_gridSize();
+
+        if (m_funcVol == nullptr) {
+            m_funcVol = new float[fsz];
         }
+
+        const FLOATTYPE *func = m_mdlayer->get_func();
+        const FLOATTYPE l = m_mdlayer->m_negated ? -1.0 : 1.0;
+
+        // log
+        if (do_log) {
+            for(size_t i = 0; i < fsz; i++) {
+                m_funcVol[i] = std::log10(1.0 + l*func[i]);
+            }
+        }
+
+        // linear
+        else {
+            for(size_t i = 0; i < fsz; i++) {
+                m_funcVol[i] = l*func[i];
+            }
+        }
+
+        curr_do_log = do_log;
+
+        m_voltf_plot->set_function(m_funcVol, m_mdlayer->get_gridSize());
+        m_voltf_plot->set_histogram(128);
+        m_voltf_plot->replot();
     }
 
-    // log
-    else {
-        for(size_t i = 0; i < fsz; i++) {
-            m_funcVol[i] = std::log10(1.0 + l*func[i]);
-        }
+    if (do_vol) {
+        m_viewer->set_volrendFunction(m_funcVol);
+        m_viewer->set_volrendTransferFunction(m_voltf_plot->tfunc, m_voltf_plot->tfsize);
     }
 
-    m_viewer->set_volrendFunction(m_funcVol);
-    m_voltf_plot->set_function(m_funcVol, m_mdlayer->get_gridSize());
-    m_voltf_plot->set_histogram(128);
-    m_voltf_plot->replot();
     m_viewer->updateGL();
 }
 
-void TopoMSApp::surtfunc_updated() {
-    m_viewer->set_sliceTransferFunction(m_surtf_plot->tfunc, m_surtf_plot->tfsize);
-    m_viewer->updateGL();
-}
-
-void TopoMSApp::voltfunc_updated() {
+void TopoMSApp::update_tfunc_vol() {
     m_viewer->set_volrendTransferFunction(m_voltf_plot->tfunc, m_voltf_plot->tfsize);
     m_viewer->updateGL();
 }
 
-// -----------------------------------------------------------------
+void TopoMSApp::update_tfunc_surf() {
+    m_viewer->set_sliceTransferFunction(m_surtf_plot->tfunc, m_surtf_plot->tfsize);
+    m_viewer->updateGL();
+}
+
+// -----------------------------------------------------------------------------
+// constructor and initializer
+// -----------------------------------------------------------------------------
+
 TopoMSApp::TopoMSApp() : QMainWindow() {
 
     m_mdlayer = new TopoMS();
     m_viewer = new TopoMSViewer(this);
     m_funcVol = 0;
 
-    m_voltf_plot = new TFEditor("Volume Transfer Function");
-    m_surtf_plot = new TFEditor("Surface Transfer Function");
-
     ui.setupUi(this);
+
+    // disable everything!
+    this->ui.groupBox_range->setEnabled(false);
+    this->ui.groupBox_data->setEnabled(false);
+    this->ui.groupBox_bader->setEnabled(false);
+    this->ui.groupBox_graph->setEnabled(false);
+    this->ui.groupBox_topo->setEnabled(false);
+
     this->setCentralWidget(m_viewer);
     this->show();                       // needed to call Viewer::init()
-
     m_viewer->printGLStatus();
 }
 
 bool TopoMSApp::initialize(QString configfilename) {
 
-    // ----------------------------
-    // init mdlayer and load data
+    // ------------------------------------------------------------------------
+    // load data
 
-    bool success = this->m_mdlayer->load(configfilename.toStdString());
-    if(!success) {
+    bool load_success = this->m_mdlayer->load(configfilename.toStdString());
+    if(!load_success)
         return false;
-    }
 
-    // ----------------------------
-    // init rest of the elements
+    // ------------------------------------------------------------------------
+    // initialize the ui elements correspponding to the data
 
     this->setWindowTitle("TopoMS ("+configfilename+")");
-    this->ui.cb_showAtoms->setEnabled(this->m_mdlayer->m_inputtype == TopoMS::IT_VASP);
 
-    if (this->m_mdlayer->m_config->tfpath.length() == 0) {
-        m_voltf_plot->init_tfunc();
-        m_surtf_plot->init_tfunc();
-    }
-    else {
-        m_voltf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
-        m_surtf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
-    }
+    // function range
+    this->ui.groupBox_range->setEnabled(true);
 
-    //m_viewer->set_dims(m_mdlayer->get_gridDims());
-    m_viewer->set_lattice(this->m_mdlayer->m_metadata.m_lattice,
-                          this->m_mdlayer->m_metadata.m_lattice_origin,
-                          this->m_mdlayer->m_metadata.m_grid_dims);
-
-    QObject::connect(m_voltf_plot, SIGNAL(tfunc_updated()), this, SLOT(voltfunc_updated()));
-    QObject::connect(m_surtf_plot, SIGNAL(tfunc_updated()), this, SLOT(surtfunc_updated()));
-
-    m_voltf_plot->show();
-    m_surtf_plot->show();
-    this->show();
-
-    // --------------------------------------------
-    // the following will be moved to ui based functions
-    m_mdlayer->init();
-
-    this->ui.dsb_persval->setValue(m_mdlayer->m_config->threshold_simp);
-    this->ui.dsb_filterval->setValue(m_mdlayer->m_config->threshold_filt);
-
-    static std::pair<FLOATTYPE, FLOATTYPE> vr = m_mdlayer->get_frange();
+    std::pair<FLOATTYPE, FLOATTYPE> vr = m_mdlayer->get_frange();
     this->ui.label_minval->setText(" min:  " + QString::number(vr.first));
     this->ui.label_maxval->setText(" max: " + QString::number(vr.second));
     update_plabels();
 
-    // --------------------------------------------
-    // transfer function
-    size_t fsz = m_mdlayer->get_gridSize();
-    const FLOATTYPE *func = m_mdlayer->get_func();
-    float l = m_mdlayer->m_negated ? -1.0 : 1.0;
+    // input data
+    this->ui.groupBox_data->setEnabled(true);
 
-    m_funcVol = new float[fsz];
-    for(size_t i = 0; i < fsz; i++) {
-        m_funcVol[i] = l*func[i];
+    //TODO: also show atoms for Cube data
+    if (this->m_mdlayer->m_inputtype != TopoMS::IT_VASP) {
+        this->ui.cb_showAtoms->setEnabled(false);
+        this->ui.label_radAtom->setEnabled(false);
+        this->ui.dsb_atom->setEnabled(false);
     }
 
-    m_viewer->set_volrendFunction(m_funcVol);
-    m_voltf_plot->set_function(m_funcVol, m_mdlayer->get_gridSize());
-    m_voltf_plot->set_histogram(128);
+    // set up volume renderer
+    if(m_mdlayer->m_metadata.m_lattice.is_cuboid()) {
 
-    // --------------------------------------------
+        // show the transfer function
+        m_voltf_plot = new TFEditor("Volume Transfer Function");
+        if (this->m_mdlayer->m_config->tfpath.length() == 0) {
+            m_voltf_plot->init_tfunc();
+        }
+        else {
+            m_voltf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
+        }
 
-    if (m_mdlayer->bader() == false) {
-        this->ui.groupBox_bader->setEnabled(false);
+        QObject::connect(m_voltf_plot, SIGNAL(tfunc_updated()), this, SLOT(update_tfunc_vol()));
+        m_voltf_plot->show();
+
+        this->update_vol_rendering();
     }
-    if (m_mdlayer->msc() == false){
-        this->ui.groupBox_graph->setEnabled(false);
-        this->ui.groupBox_topo->setEnabled(false);
-        this->ui.cb_saddleSlice->setEnabled(false);
-        this->ui.cb_log2->setEnabled(false);
-    }
-    if( !m_mdlayer->m_metadata.m_lattice.is_cuboid() ) {
+    else {
         std::cerr << "Volume rendering currently not supported for non-cuboidal lattice!\n";
-        this->ui.cb_volRend->setChecked(false);
-        this->ui.cb_volRend->setEnabled(false);
+        this->ui.cb_volume->setChecked(false);
+        this->ui.cb_volume->setEnabled(false);
     }
+
+    m_viewer->set_lattice(this->m_mdlayer->m_metadata.m_lattice,
+                          this->m_mdlayer->m_metadata.m_lattice_origin,
+                          this->m_mdlayer->m_metadata.m_grid_dims);
+
+    // ------------------------------------------------------------------------
+    // now, initialize md and perform the analysis
+    // if analysis is successful, update the corresponding ui elements
+
+    m_mdlayer->init();
+
+    bool bader_success = m_mdlayer->bader();
+    this->ui.groupBox_bader->setEnabled(bader_success);
+
+    this->ui.dsb_persval->setValue(m_mdlayer->m_config->threshold_simp);
+    this->ui.dsb_filterval->setValue(m_mdlayer->m_config->threshold_filt);
+
+    bool msc_success = m_mdlayer->msc();
+
+    this->ui.groupBox_graph->setEnabled(msc_success);
+    this->ui.groupBox_topo->setEnabled(msc_success);
+
+#if 0
+    {
+        m_surtf_plot = new TFEditor("Surface Transfer Function");
+        if (this->m_mdlayer->m_config->tfpath.length() == 0) {
+            m_surtf_plot->init_tfunc();
+        }
+        else {
+            m_surtf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
+        }
+
+        QObject::connect(m_surtf_plot, SIGNAL(tfunc_updated()), this, SLOT(surtfunc_updated()));
+        m_surtf_plot->show();
+    }
+#endif
+
+    // ------------------------------------------------------------------------
+    this->show();
 }
 
 // -----------------------------------------------------------------

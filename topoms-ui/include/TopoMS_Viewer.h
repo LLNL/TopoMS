@@ -273,18 +273,12 @@ END OF TERMS AND CONDITIONS
 #include <QKeyEvent>
 #include <QGradient>
 
-#ifdef USE_GLEW
-#include <GL/glew.h>
-#endif
-
 #include <set>
 
 #include <QGLViewer/qglviewer.h>
 #include "vsvr.h"
 #include "Vec3.h"
 #include "Mat3.h"
-
-
 
 class TopoMSApp;
 class vtkImageData;
@@ -312,15 +306,12 @@ class TopoMSViewer : public QGLViewer {
     qglviewer::Vec orig, dir, selectedPoint;
 
     std::set<int> selectedNodes, selectedAtoms;
-    //int drawn_name;
 
-#ifdef USE_GLEW
-    bool GLSL_available;
-    bool GLEW_available;
-#endif
+    int8_t draw_cellid_3x3[3];
 
 public:
 
+    // -------------------------------------------------------
     TopoMSViewer(QWidget *parent);
 
     // to support QGLViewer 2.7.1
@@ -362,48 +353,32 @@ public:
         set_bbox(bbox_min, bbox_max);
     }
 
-    /*void set_dims(const size_t dims[]) {
-
-        for(int i = 0; i < 3; i++){
-            grid_dims[i] = dims[i];
-        }
-        bbox_min = qglviewer::Vec(0,0,0);
-        bbox_max = qglviewer::Vec(grid_dims[0], grid_dims[1], grid_dims[2]);
-        set_bbox(bbox_min, bbox_max);
-    }*/
-
-private:
-
-    void set_bbox(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max);
-
-public:
     void printGLStatus();
     void create_tubes();
 
+    void draw_vtiSlice(vtkImageData *vtiSlice, const bool do_log = false) ;
+
 private:
+    // -------------------------------------------------------
+    void set_bbox(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max);
+
+    bool show_3x3(const qglviewer::Vec &pos) const;
 
     void render_volume();
-    void draw_atoms(bool with_names);
-
     void draw_extrema();
-
+    void draw_atoms(bool with_names);
     void draw_mnodes(bool with_names);
-    void draw_mpaths();
-
     void draw_nodes(bool with_names);
+    void draw_mpaths();
     void draw_arcs();
-
     void draw_saddleSlice();
-    // -------------------------------------------------------
-    // drawing functions
 
     void draw_sphere(float px, float py, float pz, QColor col, float radius = 1);
     void draw_sphere(const qglviewer::Vec &pos, QColor col = Qt::black, float radius = 1);
     void draw_sphere(const float* pos, QColor col = Qt::black, float radius = 1);
 
     void draw_manipulatedFrame(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max);
-public:
-    void draw_vtiSlice(vtkImageData *vtiSlice) ;
+
 private:
     // -------------------------------------------------------
     // static functions to draw various primitives
