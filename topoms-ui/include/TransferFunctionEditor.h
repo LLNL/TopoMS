@@ -257,7 +257,6 @@ END OF TERMS AND CONDITIONS
  *  @file    TransferFunctionEditor.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the functionality for an interactive tf editor
  *

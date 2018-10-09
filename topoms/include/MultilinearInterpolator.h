@@ -60,7 +60,6 @@ purposes.
  *  @file    MultilinearInterpolator.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    05/12/2017
- *  @version 1.0
  *
  *  @brief This file provides a templated interpolator
  *

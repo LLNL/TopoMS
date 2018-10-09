@@ -60,7 +60,6 @@ purposes.
  *  @file    InputFormats.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This header provides I/O functionality for different MD file formats
  *

@@ -256,7 +256,6 @@ END OF TERMS AND CONDITIONS
  *  @file    TransferFunctionEditor.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the functionality for an interactive tf editor
  *
@@ -681,16 +680,16 @@ void TFEditor::tfunc2channels() {
 // ===========================================================
 void TFEditor::colorGradient2tfunc(QCPColorGradient &colorGradient) {
 
-    QRgb cols[tfsize];
+    QRgb* cols = new QRgb[tfsize];
+    double* keys = new double[tfsize];
 
-    double keys[tfsize];
-    for(int i = 0; i < tfsize; i++) {
+    for(size_t i = 0; i < tfsize; i++) {
         keys[i] = (double)i;
     }
 
     colorGradient.colorize(keys, QCPRange (0, tfsize-1), cols, tfsize);
 
-    for(int i = 0; i < tfsize; i++) {
+    for(size_t i = 0; i < tfsize; i++) {
 
         tfunc[4*i  ] = (float) qRed(cols[i]) / 255.0;
         tfunc[4*i+1] = (float) qGreen(cols[i]) / 255.0;
@@ -700,6 +699,9 @@ void TFEditor::colorGradient2tfunc(QCPColorGradient &colorGradient) {
         //printf("%d : (%d %d %d %d)\n", i, qRed(cols[i]), qGreen(cols[i]),
         //       qBlue(cols[i]), qAlpha(cols[i]));
     }
+
+    delete[] cols;
+    delete[] keys;
 }
 
 QCPColorGradient TFEditor::tfunc2colorGradient() {

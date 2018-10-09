@@ -60,7 +60,6 @@ purposes.
  *  @file    Utils.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides some basic utility functions
  *
@@ -73,19 +72,24 @@ purposes.
 #include <fstream>
 #include <sstream>
 #include <iostream>
-
 #include <iterator>
+
+#ifndef _WIN32
 #include <unistd.h>
 #include <sys/ioctl.h>
+#endif
 
 #include "Utils.h"
 
 void Utils::print_separator(unsigned int n) {
 
+#ifndef _WIN32
     struct winsize w;
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
     n = w.ws_col;
-
+#else
+    n = 40;
+#endif
     for(int i=0; i<n; i++) printf("-");
     printf("\n");
 }

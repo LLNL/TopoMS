@@ -60,7 +60,6 @@ purposes.
  *  @file    Vec3.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This class handles 3-dimensional vector objects
  *

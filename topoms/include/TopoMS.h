@@ -60,7 +60,6 @@ purposes.
  *  @file    TopoMS.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the core functionality for TopoMS
  *
@@ -77,19 +76,21 @@ purposes.
 #include <vector>
 #include <unordered_set>
 
+#include "version.h"
+#include "InputFormats.h"
 #include "ConfigParser.h"
 
 #include "Vec3.h"
-#include "MolecularSystem.h"
 #include "Material.h"
-#include "InputFormats.h"
 #include "MSCBond.h"
-#include "version.h"
+#include "MolecularSystem.h"
+
+#include "basic_types.h"
+#include "vectors.h"
+
 /// -----------------------------------------------------------------------
 /// Forward declaration of the required components of MSC library
 /// -----------------------------------------------------------------------
-#include "basic_types.h"
-#include "vectors.h"
 
 namespace MSC {
 

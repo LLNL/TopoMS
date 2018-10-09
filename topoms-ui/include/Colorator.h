@@ -256,7 +256,6 @@ END OF TERMS AND CONDITIONS
  *  @file    Colorator.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides some utility functions for the viewer
  *

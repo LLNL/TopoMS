@@ -155,7 +155,7 @@ protected :
 #endif
     }
 
-    char *textFileRead(char *fn) {
+    char *textFileRead(const char *fn) {
 
         if(fn == NULL)
             return NULL;

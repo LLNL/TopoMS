@@ -257,7 +257,6 @@ END OF TERMS AND CONDITIONS
  *  @file    vtkVolumeSlicer.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    05/12/2018
- *  @version 1.0
  *
  *  @brief This file provides the functionality for slicing a 3D volume using vtk
  *

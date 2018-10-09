@@ -60,7 +60,6 @@ purposes.
  *  @file    MolecularSystem.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This class handles the meta data about the system under investigration
  *

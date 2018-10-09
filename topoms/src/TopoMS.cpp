@@ -60,7 +60,6 @@ purposes.
  *  @file    TopoMS.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the core functionality for TopoMS
  *
@@ -71,6 +70,7 @@ purposes.
  */
 
 #include <cassert>
+#include <functional>
 
 // -----------------------------------------------------------------------
 // TopoMS headers
@@ -160,6 +160,7 @@ bool TopoMS::msc_get_node(size_t idx, int &dim, INDEX_TYPE &cellIdx, MSC::Vec3d 
     cellIdx = n.cellindex;
     dim = (this->m_negated) ? 3-n.dim : n.dim;
     this->msc_cellid_to_gcoords(cellIdx, ncoords);
+    return true;
 }
 
 void TopoMS::msc_get_arcGeometry(size_t idx, std::vector<INDEX_TYPE> &arc_geom) const {
@@ -240,6 +241,7 @@ bool TopoMS::kdtree_add(MSC::kdtree* kt, double x, double y, double z, int data)
 
         kd_insert(kt, kpos, kdata);
     }
+    return true;
 }
 int TopoMS::kdtree_query(MSC::kdtree *kt, const double pos[3]) const {
 
@@ -364,13 +366,13 @@ bool TopoMS::init() {
 
     }
 
-
     persistence_val = m_config->threshold_simp;
     filter_val = m_config->threshold_filt;
 
     std::cout << "\n =====>> TopoMS initialized!";
     timer.EndGlobal ();
     timer.PrintAll ();
+    return true;
 }
 
 
@@ -1393,7 +1395,7 @@ void TopoMS::extract_lpot_nbrhood_li(FLOATTYPE pvalue, FLOATTYPE fvalue) {
     // POT
 
     if (this->m_fieldtype == FT_POT) {
-        unsigned atomidx = 637;
+        unsigned atomidx = m_atoms.size()-1;    // last atom!
         m_metadata.world_to_grid (m_atoms[atomidx].m_pos, gpos);
         std::cout << " WARNING: picking up the element " << int(atomidx) << "'s position ("<<gpos[0]<<","<<gpos[1]<<","<<gpos[2]<<")!\n";
         this->m_atoms[atomidx].print();
@@ -1442,7 +1444,6 @@ void TopoMS::write_msc_bond_stats(const std::string &filename) const {
 
     const FLOATTYPE file_to_ae = m_metadata.volume_file2Angs() * m_metadata.charge_file2electrons();
     const FLOATTYPE chgDens_fileUnit2e = (this->m_inputtype == IT_CUBE ? vol_box * file_to_ae : 1.0) / (FLOATTYPE) num_gridPts;
-
 
     size_t scnt = 0;
     for(auto iter = this->m_mscbonds.begin(); iter != this->m_mscbonds.end(); iter++) {
