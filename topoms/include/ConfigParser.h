@@ -83,9 +83,11 @@ class Config {
 
 public:
 
-    std::string infilename;
     std::string infiletype;     // VASP or CUBE
     std::string fieldtype;      // CHG or POT
+
+    std::string infilename;
+    std::string reffilename;
 
     bool is_periodic[3];
 
@@ -110,7 +112,7 @@ public:
       *   @param  fname is the name of the config file
       */
     Config(const std::string fname) : configname(fname),
-        infilename(""), infiletype(""), fieldtype(""), tfpath(""),
+        infilename(""), reffilename(""), infiletype(""), fieldtype(""), tfpath(""),
         do_bader(false), threshold_vacuum(-1),
         do_msc(false), threshold_simp(-1), threshold_filt(-1),
         threshold_grad(-1), threshold_error(-1), numiter(1), rkindex(1)
@@ -153,6 +155,7 @@ public:
             Utils::toupper(p);
 
             if(p == "INFILE"){            infilename = v;                           continue;   }
+            if(p == "REFCHG"){            reffilename = v;                          continue;   }
             if(p == "INFILETYPE"){        infiletype = Utils::toupper(v);           continue;   }
             if(p == "FIELDTYPE"){         fieldtype = Utils::toupper(v);            continue;   }
 
@@ -197,6 +200,11 @@ public:
             exit(1);
         }
 
+        if (fieldtype != "CHG" && reffilename.length() > 0) {
+            reffilename = "";
+            std::cerr << "\n    Config::parse() - Ignoring REFCHG because FIELDTYPE != CHG";
+            need_newline = true;
+        }
         if(threshold_vacuum < 0){
             threshold_vacuum = 0.1;
             std::cout << "\n    Config::parse() - THRESHOLD_VACUUM not found. defaulting to " << threshold_vacuum;

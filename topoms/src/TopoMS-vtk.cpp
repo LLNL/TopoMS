@@ -379,6 +379,7 @@ bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &at
 
     for(size_t i = 0; i < n; i++) {
 
+        // this value is coming from bader function
         float value = slicer->slice()->GetPointData()->GetScalars()->GetComponent(i, 0);
         if(std::isnan(value)) {
             continue;
@@ -403,11 +404,11 @@ bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &at
             exit(1);
         }
 
-        // use periodic value
-        value = MultilinearInterpolator::trilinear_interpolation(pnt3d, m_func, gdims);
+        // use periodic value of mscfunction for vacum filtering
+        FLOATTYPE mscval = MultilinearInterpolator::trilinear_interpolation(pnt3d, m_mscfunc, gdims);
 
         // filter out vaccum
-        int atomIdx = (fabs(value) <= vacthreshold_in_fileUnits) ? 0 : this->bader_get_atomLabeling(pnt3d);
+        int atomIdx = (fabs(mscval) <= vacthreshold_in_fileUnits) ? 0 : this->bader_get_atomLabeling(pnt3d);
 
         // filter out the pixels outside these atomic regions
         if (std::find(atomids.begin(), atomids.end(), atomIdx) == atomids.end()) {
@@ -419,6 +420,10 @@ bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &at
             }
             continue;
         }
+
+
+        // but, to write the value, use bader function
+        value = MultilinearInterpolator::trilinear_interpolation(pnt3d, m_baderfunc, gdims);
 
         // finally, if this pixel persists, overwrite the correct value
         if (overwrite) {
@@ -432,7 +437,7 @@ bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &at
     }
 }
 
-std::pair<double, double> TopoMS::integrate_slice(const vtkVolumeSlicer *slicer, const double *func) const {
+std::pair<double, double> TopoMS::integrate_slice(const vtkVolumeSlicer *slicer) const {
 
     // integrate the area and function on a slice
     double ifunc = 0;
@@ -475,7 +480,7 @@ std::pair<double, double> TopoMS::integrate_slice(const vtkVolumeSlicer *slicer,
         size_t idx = this->m_metadata.grid_to_idx(int(pnt3d[0]), int(pnt3d[1]), int(pnt3d[2]));
 
         iarea += 1;
-        kchg_slice = Utils::Kahan::KahanSum(kchg_slice, this->m_func[idx]);
+        kchg_slice = Utils::Kahan::KahanSum(kchg_slice, this->m_baderfunc[idx]);
     }
 
     ifunc = kchg_slice.sum;
@@ -580,7 +585,7 @@ void TopoMS::compute_baderAreas() {
 
         TopoMS::compute_slice(origin, nbrs, slicer);
         this->filter_slice(slicer, bond.atomIds);
-        std::pair<double,double> res = this->integrate_slice(slicer, this->m_func);
+        std::pair<double,double> res = this->integrate_slice(slicer);
         bond.iarea = res.first;
         bond.ichg = res.second;
 

@@ -96,6 +96,7 @@ public:
     Material(std::string s, float x, float y, float z) {
         m_symbol = s;
         m_atom_number = 0;
+        m_charge = -1;
         m_pos = new float[3];
         m_pos[0] = x;   m_pos[1] = y;   m_pos[2] = z;
     }
@@ -121,12 +122,26 @@ public:
         return 1.0;
     }
 
+    bool operator == (const Material &m) const {
+
+        static const float eps = 0.00001;
+
+        if (m_symbol.compare(m.m_symbol) != 0)      return false;
+        if (m_atom_number != m.m_atom_number)       return false;
+        if (fabs(m_charge - m.m_charge) > eps)      return false;
+
+        if (fabs(m_pos[0] - m.m_pos[0]) > eps)      return false;
+        if (fabs(m_pos[1] - m.m_pos[1]) > eps)      return false;
+        if (fabs(m_pos[2] - m.m_pos[2]) > eps)      return false;
+        return true;
+    }
+
     void print() const {
 
         std::cout << " Atom ";
-        if(m_symbol != "") {        std::cout << m_symbol << " ";   }
-        if(m_atom_number != 0) {    std::cout << " [" << int(m_atom_number) << "] ";   }
-        std::cout << " at (" << m_pos[0]<<", "<<m_pos[1]<<", "<<m_pos[2]<<")" << std::endl;
+        if(m_symbol != "") {        std::cout << m_symbol << " ";                     }
+        if(m_atom_number != 0) {    std::cout << "[" << int(m_atom_number) << "] ";   }
+        std::cout << "at (" << m_pos[0]<<", "<<m_pos[1]<<", "<<m_pos[2]<<")" << std::endl;
     }
 };
 

@@ -338,7 +338,7 @@ namespace MS {
                         mdata.m_charge_unit = "hartree";    mdata.m_charge_file2electrons = 0.036749309;
                     }
                     else {
-                        mdata.m_length_unit = "Ang";   mdata.m_length_file2Angs = 1.0;
+                        mdata.m_length_unit = "Ang";        mdata.m_length_file2Angs = 1.0;
                         mdata.m_charge_unit = "eV";         mdata.m_charge_file2electrons = 1.0;
                     }
                 }

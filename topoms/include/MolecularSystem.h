@@ -143,6 +143,38 @@ class SystemInfo {
             std::cout << "    # time_steps = " << m_num_tsteps << ", time_step = " << m_time_step <<" " << m_time_unit << std::endl;
         }
 
+        bool operator == (const SystemInfo &m) const {
+
+            static const float eps = 0.00001;
+
+            if (m_sysname.compare(m.m_sysname) != 0)                                return false;
+            if (m_length_unit.compare(m.m_length_unit) != 0)                        return false;
+            if (m_charge_unit.compare(m.m_charge_unit) != 0)                        return false;
+            if (m_time_unit.compare(m.m_time_unit) != 0)                            return false;
+            if (m_coordinate_type.compare(m.m_coordinate_type) != 0)                return false;
+
+            if (fabs(m_length_file2Angs - m.m_length_file2Angs) > eps)              return false;
+            if (fabs(m_charge_file2electrons - m.m_charge_file2electrons) > eps)    return false;
+
+            if (fabs(m_scaling - m.m_scaling) > eps)                                return false;
+            if (fabs(m_time_step - m.m_time_step) > eps)                            return false;
+
+            if (fabs(m_temperature - m.m_temperature) > eps)                        return false;
+            if (fabs(m_avg_atomic_vol - m.m_avg_atomic_vol) > eps)                  return false;
+
+            if (m_num_tsteps != m.m_num_tsteps)                                     return false;
+            if (m_time_factor != m.m_time_factor)                                   return false;
+
+            for(uint8_t d = 0; d < 3; d++) {
+
+                if (m_grid_dims[d] != m.m_grid_dims[d])                             return false;
+                if (fabs(m_lattice_origin[d] - m.m_lattice_origin[d]) > eps)        return false;
+                if (fabs(m_lattice.v[d][0] - m.m_lattice.v[d][0]) > eps)            return false;
+                if (fabs(m_lattice.v[d][1] - m.m_lattice.v[d][1]) > eps)            return false;
+                if (fabs(m_lattice.v[d][2] - m.m_lattice.v[d][2]) > eps)            return false;
+            }
+            return true;
+        }
         // -----------------------------------------------------------------------------
         // -----------------------------------------------------------------------------
         // conversion between various types of spatial coordinates!

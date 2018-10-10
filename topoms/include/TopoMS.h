@@ -179,7 +179,15 @@ private:
     // ----------------------------------------------------------------------
     // input related
     std::string m_datadir;
-    FLOATTYPE *m_func;
+
+    // the function used for msc analysis
+    FLOATTYPE *m_mscfunc;
+
+    // the function used for bader anlaysis
+        // if ref charge is provided
+            // m_mscfunc = ref charge
+            // m_baderfunc = main charge
+    FLOATTYPE *m_baderfunc;
 
 #ifdef USE_VTK
     vtkImageData *m_vtkFunction;
@@ -245,7 +253,7 @@ public:
     // initialization functions
 
     TopoMS() : m_config(0), m_inputtype(IT_UNKNOWN), m_fieldtype(FT_UNKNOWN), m_negated(false),
-                   m_grid(0), m_tgrid(0), m_func(0), m_gridfunc(0), m_topofunc(0),
+                   m_grid(0), m_tgrid(0), m_mscfunc(0), m_gridfunc(0), m_topofunc(0),
                    m_integrator(0), m_integrator2(0), m_msc(0),
                    m_kdtree_minima(0), m_kdtree_atoms(0),
                    persistence_val(1.0), filter_val(1.0)
@@ -262,8 +270,8 @@ public:
     // ----------------------------------------------------------------------
     // basic interface
 
-    FLOATTYPE* get_func() {                     return m_func;              }
-    const FLOATTYPE* get_func() const {         return m_func;              }
+    FLOATTYPE* get_func() {                     return m_mscfunc;              }
+    const FLOATTYPE* get_func() const {         return m_mscfunc;              }
 
     size_t get_gridSize() const {               return m_metadata.grid_sz();    }
 
@@ -293,12 +301,19 @@ public:
     }
 
     // ----------------------------------------------------------------------
-    std::pair<FLOATTYPE, FLOATTYPE> get_frange() const {
+    // show_raw:    ignore negated!
+    std::pair<FLOATTYPE, FLOATTYPE> get_frange(const FLOATTYPE *func, bool show_raw) const {
 
+        const bool negate = !show_raw && this->m_negated;
         const size_t sz = get_gridSize();
-        FLOATTYPE minval = *std::min_element(m_func, m_func+sz);
-        FLOATTYPE maxval = *std::max_element(m_func, m_func+sz);
-        return (this->m_negated) ? std::make_pair(-1*maxval, -1*minval) : std::make_pair(minval, maxval);
+
+        FLOATTYPE minval = *std::min_element(func, func+sz);
+        FLOATTYPE maxval = *std::max_element(func, func+sz);
+        return (negate) ? std::make_pair(-1*maxval, -1*minval) : std::make_pair(minval, maxval);
+    }
+
+    std::pair<FLOATTYPE, FLOATTYPE> get_frange() const {
+        return get_frange(m_mscfunc, false);
     }
 
     // ----------------------------------------------------------------------
@@ -368,7 +383,7 @@ private:
     static void compute_slice(const MSC::Vec3d &origin, const std::vector<MSC::Vec3d> &nbrs, vtkVolumeSlicer *slicer);
 
     bool filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &atomids, bool overwrite = false) const;
-    std::pair<double, double> integrate_slice(const vtkVolumeSlicer *slicer, const double *func) const;
+    std::pair<double, double> integrate_slice(const vtkVolumeSlicer *slicer) const;
 #endif
 
     // ----------------------------------------------------------------------

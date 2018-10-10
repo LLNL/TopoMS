@@ -279,11 +279,11 @@ bool TopoMS::load(const std::string &configfilename, std::string datafile) {
     // -----------------------------------------------------------------------
 
     if (m_config->infiletype == "VASP") {
-        m_func = MS::VASP::read_CAR<FLOATTYPE>(m_config->infilename, m_metadata, m_atoms);
+        m_mscfunc = MS::VASP::read_CAR<FLOATTYPE>(m_config->infilename, m_metadata, m_atoms);
         this->m_inputtype = IT_VASP;
     }
     else if (m_config->infiletype == "CUBE") {
-        m_func = MS::Cube::read<FLOATTYPE>(m_config->infilename, m_metadata, m_atoms);
+        m_mscfunc = MS::Cube::read<FLOATTYPE>(m_config->infilename, m_metadata, m_atoms);
         this->m_inputtype = IT_CUBE;
     }
 
@@ -301,6 +301,51 @@ bool TopoMS::load(const std::string &configfilename, std::string datafile) {
         }
     }
 
+    m_baderfunc = m_mscfunc;
+    if (m_config->infiletype == "VASP" && m_config->reffilename.length() > 0) {
+
+        MS::SystemInfo ref_metadata;
+        std::vector<Material> ref_atoms;
+
+        m_baderfunc = MS::VASP::read_CAR<FLOATTYPE>(m_config->reffilename, ref_metadata, ref_atoms);
+
+        // make sure the two files give the same atoms
+        if (ref_atoms.size() != m_atoms.size()) {
+            std::cerr << "Mismatch in number of atoms given by "
+                      << "(" << m_config->infilename << ") [" << m_atoms.size() << "] and "
+                      << "(" << m_config->reffilename << ") [" << ref_atoms.size() << "] \n";
+            exit(1);
+        }
+
+        for(size_t i = 0; i < m_atoms.size(); i++) {
+
+            if (m_atoms[i] == ref_atoms[i])
+                continue;
+
+            std::cerr << "Mismatch in atom " << i << " : \n";
+            m_atoms[i].print();
+            ref_atoms[i].print();
+            exit(1);
+        }
+
+        // make sure the two files give the same metadata
+        if (!(m_metadata == ref_metadata)) {
+            std::cerr << "Mismatch in metadata\n";
+            m_metadata.print();
+            ref_metadata.print();
+            exit(1);
+        }
+
+
+        // if the user specifies a ref function,
+        // the ref function should be used for graph computation
+        // but function for bader charges
+
+        // since the code is written completely to work with m_mscfunc,
+        // we will swap the pointers
+        // at the time of integrating bader charges, we will use m_baderfunc
+        std::swap(m_mscfunc, m_baderfunc);
+    }
 
     if (m_config->fieldtype == "CHG") {             this->m_fieldtype = FT_CHG;         }
     else if (m_config->fieldtype == "POT") {        this->m_fieldtype = FT_POT;         }
@@ -308,17 +353,25 @@ bool TopoMS::load(const std::string &configfilename, std::string datafile) {
     m_metadata.print ();
 
     // -----------------------------------------------------------------------
-    const size_t nsz = m_metadata.grid_sz();
-    const FLOATTYPE minval = *std::min_element(m_func, m_func+nsz);
-    const FLOATTYPE maxval = *std::max_element(m_func, m_func+nsz);
-
     std::cout << "    # atoms = " << m_atoms.size() << "\n";
-    std::cout << "    function range = [" << minval << ", " << maxval<< "]\n";
+
+    if (m_baderfunc == m_mscfunc) {
+        std::pair<FLOATTYPE, FLOATTYPE> vr = get_frange(m_mscfunc, true);
+        std::cout << "    function range = [" << vr.first << ", " << vr.second<< "]\n";
+    }
+    else {
+
+        std::pair<FLOATTYPE, FLOATTYPE> vr = get_frange(m_baderfunc, true);
+        std::cout << "    bader function range     = [" << vr.first << ", " << vr.second << "]\n";
+
+        vr = get_frange(m_mscfunc, true);
+        std::cout << "    msc (ref) function range = [" << vr.first << ", " << vr.second<< "]\n";
+    }
 
     // -----------------------------------------------------------------------
 
 #ifdef USE_VTK
-    m_vtkFunction = this->create_vtkImagedata(m_func, "function");
+    m_vtkFunction = this->create_vtkImagedata(m_baderfunc, "function");
     m_slicer_function = new vtkVolumeSlicer();
     m_slicer_function->set_volume(m_vtkFunction);
 #endif
@@ -351,19 +404,37 @@ bool TopoMS::init() {
     m_grid = new MSC::RegularGrid(MSC::Vec3i(m_metadata.m_grid_dims[0], m_metadata.m_grid_dims[1], m_metadata.m_grid_dims[2]),
                                   MSC::Vec3b(m_config->is_periodic[0], m_config->is_periodic[1], m_config->is_periodic[2]));
 
-    m_gridfunc = new MSC::RegularGridTrilinearFunction(m_grid, m_func);
+    m_gridfunc = new MSC::RegularGridTrilinearFunction(m_grid, m_mscfunc);
     m_gridfunc->ComputeGradFromImage(1);
 
     if (1) {
-        std::cout << " -- Negating the function.";
+        std::cout << " -- Negating the function.\n";
         m_negated = true;
         m_gridfunc->Negate();
 
-        const size_t nsz = m_metadata.grid_sz();
-        const FLOATTYPE minval = *std::min_element(m_func, m_func+nsz);
-        const FLOATTYPE maxval = *std::max_element(m_func, m_func+nsz);
-        std::cout << " new function range = [" << minval << ", " << maxval<< "]\n";
+        if (m_baderfunc == m_mscfunc) {
 
+            std::pair<FLOATTYPE, FLOATTYPE> vr = get_frange(m_mscfunc, true);
+            std::cout << "    -- negated function range = [" << vr.first << ", " << vr.second<< "]\n";
+        }
+        else {
+
+            const size_t nsz = m_metadata.grid_sz();
+#pragma omp parallel for schedule(static)
+            for (INDEX_TYPE i = 0; i < nsz; i++) {
+                m_baderfunc[i] *= -1;
+            }
+
+            // remember, we have swapped the two functions in the load()
+            // since, this print is only for display, we use the *correct* names of the functions
+            // to not confuse the user
+
+            std::pair<FLOATTYPE, FLOATTYPE> vr = get_frange(m_baderfunc, true);
+            std::cout << "    -- negated function range = [" << vr.first << ", " << vr.second<< "]\n";
+
+            vr = get_frange(m_mscfunc, true);
+            std::cout << "    -- negated ref_function range = [" << vr.first << ", " << vr.second<< "]\n";
+        }
     }
 
     persistence_val = m_config->threshold_simp;
@@ -427,7 +498,7 @@ bool TopoMS::bader() {
 
     // ---------------------------------------------------------------------
     // sum of function values
-    const FLOATTYPE sum_func = (this->m_negated ? -1 : 1) * Utils::Kahan::sum(m_func, m_metadata.grid_sz());
+    const FLOATTYPE sum_func = (this->m_negated ? -1 : 1) * Utils::Kahan::sum(m_baderfunc, m_metadata.grid_sz());
     const FLOATTYPE total_chg = sum_func * chgDens_fileUnit2e;
 
     Utils::print_separator();
@@ -463,6 +534,7 @@ bool TopoMS::bader() {
         if (verbose) {  printf("\n");                   }
         else {          printf("...");  fflush(stdout); }
 
+        // vacuum is applied on the m_gridfunc = m_mscfunc
         m_integrator = new MSC::IntegratorType(m_gridfunc, m_grid, m_config->threshold_error, m_config->threshold_grad, m_config->numiter);
         m_integrator->set_filter(vacthreshold_in_fileUnits);                         // the integrator will not seed a streamline for smaller values
 
@@ -587,10 +659,11 @@ bool TopoMS::bader() {
 
         for(INDEX_TYPE vIdx = 0; vIdx < numlabels; vIdx++){
 
-            const FLOATTYPE value = (this->m_negated ? -1 : 1) * m_gridfunc->SampleImage(vIdx);
+            // 2018/10/10:  use "bader_func" which could be m_func or m_reffunc
+            //const FLOATTYPE value = (this->m_negated ? -1 : 1) * m_gridfunc->SampleImage(vIdx);
+            const FLOATTYPE value = (this->m_negated ? -1 : 1) * m_baderfunc[vIdx];
 
             int extIdx = (*m_volumelabeling)[vIdx];
-
             int atomIdx = (fabs(value) <= vacthreshold_in_fileUnits || extIdx == -2 ) ? 0 : extrema2atoms[extIdx];
             extIdx = (extIdx == -2) ? 0 : extIdx+1;
 
@@ -693,7 +766,6 @@ bool TopoMS::msc() {
     timer.StartGlobal();
 
     {
-
         MSC::ThreadedTimer ltimer(1);
         ltimer.StartGlobal();
 
@@ -782,7 +854,7 @@ bool TopoMS::msc() {
             for (vit.begin(); vit.valid(); vit.advance()) {
 
                 vid = vit.value();
-                if ( fabs( m_topofunc->cellValue(vid) ) > vacthreshold ) {
+                if ( fabs(m_topofunc->cellValue(vid) ) > vacthreshold ) {
                     continue;
                 }
 
@@ -1468,7 +1540,7 @@ void TopoMS::write_msc_bond_stats(const std::string &filename) const {
         fprintf(outfile, "   iarea %f, ichg %f\n", vol_voxel*bond.iarea, chgDens_fileUnit2e*bond.ichg);
 
         std::vector<std::pair<float, float>> vals;
-        bond.study_value(this->m_func, gdims, vals);
+        bond.study_value(m_baderfunc, gdims, vals);
 
         for(unsigned k = 0; k < vals.size(); k++)
             fprintf(outfile, "% 08.5f, %.6E\n", vals[k].first, chgDens_fileUnit2e*(this->m_negated ? -1.0*vals[k].second : vals[k].second));
