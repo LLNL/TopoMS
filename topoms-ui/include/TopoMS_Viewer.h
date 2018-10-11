@@ -274,6 +274,10 @@ END OF TERMS AND CONDITIONS
 
 #include <set>
 
+#ifdef USE_GLEW
+#include <GL/glew.h>
+#endif
+
 #include <QGLViewer/qglviewer.h>
 #include "vsvr.h"
 #include "Vec3.h"

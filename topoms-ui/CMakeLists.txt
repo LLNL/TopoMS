@@ -21,6 +21,18 @@ include_directories(${Qt5Core_INCLUDE_DIRS}   ${Qt5Gui_INCLUDE_DIRS}
                     ${Qt5OpenGL_INCLUDE_DIRS} ${Qt5Widgets_INCLUDE_DIRS}
                     ${Qt5Xml_INCLUDE_DIRS}    ${Qt5PrintSupport_INCLUDE_DIRS})
 
+
+# ------------------------------------------------------------------------------
+# Glew
+# TODO: move this into a FindQGLViewer.cmake file
+OPTION(USE_GLEW "Use GLEW for opengl wrangling (Windows)" OFF)
+if (USE_GLEW)
+	find_package(GLEW REQUIRED)
+	include_directories(${GLEW_INCLUDE_DIRS})
+	add_definitions(-DUSE_GLEW)
+endif(USE_GLEW)
+	
+
 # ------------------------------------------------------------------------------
 # libQGLViewer
 # TODO: move this into a FindQGLViewer.cmake file
@@ -79,7 +91,10 @@ add_executable(${TRG_UI} ${HDRS_TOPOMSUI} ${SRCS_TOPOMSUI})
 
 target_link_libraries(${TRG_UI} LINK_PUBLIC ${TRG_LIB})
 target_link_libraries(${TRG_UI} LINK_PUBLIC
-                        ${QT_LIBRARIES} ${OPENGL_LIBRARIES} ${QGLVIEWER_LIBRARY})
+                        ${QT_LIBRARIES} ${OPENGL_LIBRARIES} ${QGLVIEWER_LIBRARY} )
+if(USE_GLEW)
+	target_link_libraries(${TRG_UI} LINK_PUBLIC ${GLEW_LIBRARIES})
+endif(USE_GLEW)
 
 install(TARGETS ${TRG_UI}
         BUNDLE DESTINATION bin

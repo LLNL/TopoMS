@@ -9,8 +9,6 @@ include_directories(${PATH_MSC}/include ${PATH_TOPOMS}/include)
 add_executable(${TRG_CLI} ${PATH_CLI}/src/main.cpp)
 target_link_libraries(${TRG_CLI} LINK_PUBLIC ${TRG_LIB})
 
-install(TARGETS ${TRG_CLI}
-        BUNDLE DESTINATION bin
-        RUNTIME DESTINATION bin)
+install(TARGETS ${TRG_CLI} DESTINATION bin)
 
 # ------------------------------------------------------------------------------

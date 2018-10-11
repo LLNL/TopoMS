@@ -135,7 +135,7 @@ public:
         if (fabs(det) < 0.000001) {
             std::cerr << "Cannot compute inverse for singular matrix!\n";
             inv.eye();
-            return;
+            return inv;
         }
 
         det = 1.0/det;

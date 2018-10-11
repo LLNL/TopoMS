@@ -117,7 +117,7 @@ struct MSCBond {
     void parameterize(const size_t dims[3]);
     void get_points(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], float p) const;
     void get_points_idx(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], int pidx) const;
-    void study_value(const double *func, const size_t dims[3], std::vector<std::pair<float, float> > &vals);
+    void study_value(const double *func, const size_t dims[3], std::vector<std::pair<float, float> > &vals) const;
 };
 
 #endif

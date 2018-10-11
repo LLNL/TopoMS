@@ -199,7 +199,13 @@ const std::vector<long long> &TopoMS::bader_get_extrema() const {
 
 int TopoMS::bader_get_atomLabeling(INDEX_TYPE vIdx) const {
     int extIdx = (*m_volumelabeling)[vIdx];
-    int atomIdx = (extIdx == -2 ) ? 0 : extrema2atoms[extIdx];
+	int atomIdx;
+	if (extIdx == -2) {
+		atomIdx = 0;
+	}
+	else {
+		atomIdx = extrema2atoms.at(extIdx);
+	}
     return atomIdx;
 }
 int TopoMS::bader_get_atomLabeling(size_t x, size_t y, size_t z) const {

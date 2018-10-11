@@ -382,7 +382,7 @@ void TopoMSApp::update_vol_rendering() {
 
     m_viewer->updateGL();
 }
-void TopoMSApp::update_slice(const vtkDataArray *data, std::vector<float> &values) {
+void TopoMSApp::update_slice( vtkDataArray *data, std::vector<float> &values) {
 
     values.clear();
 

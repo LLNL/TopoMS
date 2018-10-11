@@ -295,7 +295,7 @@ void vtkVolumeSlicer::matrix(double mat[16]) const {
         mat[i*4+j] = m_matrix->GetElement(j,i);
 }
 
-void vtkVolumeSlicer::set_volume(vtkImageData *volume, bool periodic=true) {
+void vtkVolumeSlicer::set_volume(vtkImageData *volume, bool periodic/*=true*/) {
     m_volume = volume;
     m_periodic = periodic;
 }

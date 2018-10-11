@@ -368,7 +368,7 @@ void TopoMS::compute_slice(const MSC::Vec3d &origin, const std::vector<MSC::Vec3
     slicer->compute();
 }
 
-bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &atomids, bool overwrite = false) const {
+bool TopoMS::filter_slice(vtkVolumeSlicer *slicer, const std::vector<size_t> &atomids, bool overwrite /*= false*/) const {
 
     // set nan for any pixel that does not have atomids as its label
     size_t n = slicer->slice()->GetNumberOfPoints();
@@ -495,7 +495,7 @@ std::pair<double, double> TopoMS::integrate_slice(const vtkVolumeSlicer *slicer)
 /**
   *   @brief  Compute a 2D slice through a given saddle and parameterized bond path
   */
-bool TopoMS::refresh_orthogonalSlice(int saddleNodeId, int param=0, int minp=-100, int maxp=100) {
+bool TopoMS::refresh_orthogonalSlice(int saddleNodeId, int param/*=0*/, int minp/*=-100*/, int maxp/*=100*/) {
 
 #ifndef USE_VTK
     printf("TopoMS::refresh_orthogonalSlice. VTK not available\n");

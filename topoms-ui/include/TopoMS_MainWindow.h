@@ -271,7 +271,9 @@ END OF TERMS AND CONDITIONS
 
 #include <vector>
 #include <set>
-
+#ifdef USE_GLEW
+#include <GL/glew.h>
+#endif
 #include <QMainWindow>
 #include "ui_TopoMSUI.h"
 
@@ -353,7 +355,7 @@ public:
     // update labels on the ui
     void update_plabels();
     void update_vol_rendering();
-    void update_slice(const vtkDataArray *slice, std::vector<float> &values);
+    void update_slice( vtkDataArray *slice, std::vector<float> &values);
 
 
 public slots:

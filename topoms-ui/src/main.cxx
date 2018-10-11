@@ -252,7 +252,9 @@ OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 END OF TERMS AND CONDITIONS
 */
 
-
+#ifdef USE_GLEW
+#include <GL/glew.h>
+#endif
 #include <QApplication>
 #include "TopoMS_MainWindow.h"
 

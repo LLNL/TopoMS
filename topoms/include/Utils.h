@@ -80,6 +80,8 @@ purposes.
 #include <vector>
 #include <string>
 
+#include <cctype>
+
 namespace Utils {
 
     // -------------------------------------------------------
@@ -257,7 +259,7 @@ namespace Utils {
 
     inline std::string rtrim(std::string& str) {
         str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) {
-            return !std::isspace(ch);
+            return !std::isspace(static_cast<char>(ch)); 
         }).base(), str.end());
         return str;
     }

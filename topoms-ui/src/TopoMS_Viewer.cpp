@@ -306,6 +306,7 @@ TopoMSViewer::TopoMSViewer(QWidget *parent) : QGLViewer(parent){
     draw_cellid_3x3[2] = 0;
 }
 
+
 void TopoMSViewer::set_bbox(const qglviewer::Vec &bbox_min, const qglviewer::Vec &bbox_max) {
 
     qglviewer::Vec center = 0.5 * (bbox_min + bbox_max);
@@ -314,7 +315,7 @@ void TopoMSViewer::set_bbox(const qglviewer::Vec &bbox_min, const qglviewer::Vec
     this->camera()->centerScene();
     this->camera()->showEntireScene();
 
-    std::cout << " setting bounding box: "<<"["<< bbox_min <<"] ["<<bbox_max<<"]\n";
+    //std::cout << " setting bounding box: "<<"["<< bbox_min <<"] ["<<bbox_max<<"]\n";
     GLfloat lightPos[] = {(GLfloat)bbox_max[0], (GLfloat)bbox_max[1], (GLfloat)bbox_max[2], 0.0f };
     glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
 }
@@ -334,7 +335,16 @@ void TopoMSViewer::printGLStatus() {
 void TopoMSViewer::init(){
 
     QGLViewer::init();
-
+	glewInit();
+	GLenum err = glewInit();
+#ifdef USE_GLEW
+	if (GLEW_OK != err)
+	{
+		/* Problem: glewInit failed, something is seriously wrong. */
+		fprintf(stderr, "Error: %s\n", glewGetErrorString(err));
+	}
+	fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
+#endif
     // ---------------------------------------------------------
     // create a precompiled list to draw spheres
     sphereList = glGenLists(1);
@@ -798,7 +808,7 @@ void TopoMSViewer::draw_vtiSlice(vtkImageData *vtiSlice) {
 #endif
 
     // data
-    const vtkDoubleArray *scalarData = (vtkDoubleArray*) vtiSlice->GetPointData()->GetScalars();
+    vtkDoubleArray *scalarData = (vtkDoubleArray*) vtiSlice->GetPointData()->GetScalars();
 
     const bool do_labels = scalarData->GetDataType() == VTK_INT;
     const bool do_log = !do_labels && parentApp->slicelog();

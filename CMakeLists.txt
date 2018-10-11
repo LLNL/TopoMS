@@ -74,6 +74,7 @@ endif(VTK_FOUND)
 add_subdirectory(topoms)
 add_subdirectory(topoms-cli)
 
+OPTION(TOPOMS_BUILD_UI "Build User Interface" OFF)
 if(TOPOMS_BUILD_UI)
     add_subdirectory(topoms-ui)
 endif()

@@ -170,7 +170,7 @@ void MSCBond::parameterize(const size_t dims[3]) {
         printf(" %f, (%f %f %f)\n", parameterization[k].first, parameterization[k].second[0], parameterization[k].second[1], parameterization[k].second[2]);
 }
 
-void MSCBond::study_value(const double *func, const size_t dims[], std::vector<std::pair<float, float>> &vals) {
+void MSCBond::study_value(const double *func, const size_t dims[], std::vector<std::pair<float, float>> &vals) const {
 
     vals.clear();
     vals.resize(this->parameterization.size());

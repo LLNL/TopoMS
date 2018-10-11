@@ -18,15 +18,13 @@ file(GLOB SRCS_TOPOMS ${PATH_TOPOMS}/src/*.cpp)
 # ------------------------------------------------------------------------------
 # create and install target
 
-add_library(${TRG_LIB} SHARED
+add_library(${TRG_LIB} STATIC
             ${HDRS_MSC} ${HDRS_TOPOMS} ${SRCS_MSC} ${SRCS_TOPOMS})
 
 if(VTK_FOUND)
   target_link_libraries(${TRG_LIB} LINK_PUBLIC ${VTK_LIBRARIES})
 endif(VTK_FOUND)
 
-install(TARGETS ${TRG_LIB}
-        BUNDLE DESTINATION lib
-        LIBRARY DESTINATION lib)
+install(TARGETS ${TRG_LIB} DESTINATION lib )
 
 # ------------------------------------------------------------------------------
