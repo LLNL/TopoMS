@@ -335,9 +335,10 @@ void TopoMSViewer::printGLStatus() {
 void TopoMSViewer::init(){
 
     QGLViewer::init();
-	glewInit();
-	GLenum err = glewInit();
+
 #ifdef USE_GLEW
+    glewInit();
+	GLenum err = glewInit();
 	if (GLEW_OK != err)
 	{
 		/* Problem: glewInit failed, something is seriously wrong. */
@@ -345,6 +346,7 @@ void TopoMSViewer::init(){
 	}
 	fprintf(stdout, "Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 #endif
+
     // ---------------------------------------------------------
     // create a precompiled list to draw spheres
     sphereList = glGenLists(1);
