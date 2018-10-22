@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 University of Utah 
+ * Copyright (c) 2017 University of Utah
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,7 +68,8 @@ public:
     MSCIteratorLivingNodes(MSCType* msc) : MSCIteratorNodes<MSCType>(msc) {}
     void begin() {
         MSCIteratorNodes<MSCType>::begin();
-        advance_until_alive();
+        if (this->valid() && !this->mMSC->isNodeAlive(this->currid))
+          advance_until_alive();
     }
     void advance() {
         advance_until_alive();
@@ -104,7 +105,8 @@ public:
     MSCIteratorLivingArcs(MSCType* msc) : MSCIteratorArcs<MSCType>(msc) {}
     void begin() {
         MSCIteratorArcs<MSCType>::begin();
-        advance_until_alive();
+        if (this->valid() && !this->mMSC->isNodeAlive(this->currid))
+          advance_until_alive();
     }
     void advance() {
         advance_until_alive();

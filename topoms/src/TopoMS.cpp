@@ -185,8 +185,10 @@ void TopoMS::msc_print_node(size_t idx) const {
 
     MSC::Vec3d ncoords;
     this->msc_cellid_to_gcoords(n.cellindex, ncoords);
-    printf(" %s (node %d) at (%.1f %.1f %.1f) val = %f\n", type.c_str(), idx,
-                        ncoords[0], ncoords[1], ncoords[2], val);
+
+    printf(" %s (node %d, cell %d) at (%.1f %.1f %.1f) val = %f\n",
+                  type.c_str(), idx, n.cellindex,
+                  ncoords[0], ncoords[1], ncoords[2], val);
 }
 
 // -----------------------------------------------------------------------------------------
@@ -274,7 +276,7 @@ bool TopoMS::load(const std::string &configfilename, std::string datafile) {
     m_config->parse();
 
     // overwrite the file
-    if (datafile.length() > 0) {        
+    if (datafile.length() > 0) {
         std::cout << " Overwriting the input file ("<<m_config->infilename<<") with argument ("<<datafile<<")\n";
         m_config->infilename = datafile;
     }
@@ -906,6 +908,15 @@ bool TopoMS::msc() {
     // ---------------------------------------------------------------------
     // compute full MSC
     // ---------------------------------------------------------------------
+
+
+    // Oct 22, 2018. Attila suggested setting the restriction to null
+    // since discrete gradient has already been computed, we can remove the restriction
+    // to handle some cases of mismatch between numerical and discrete
+    // otherwise, we see different boundary values for some critical point pairs
+    // that persistence simplification cannot remove
+    m_tgrid->set_restriction (nullptr);
+
     {
         MSC::ThreadedTimer ltimer(1);
         ltimer.StartGlobal();
@@ -1078,6 +1089,8 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
     persistence_val = pvalue;
     filter_val = fvalue;
 
+    this->m_mscbonds.clear();
+
     // ----------------------------------------------------------
     Utils::print_separator();
     printf("\n -- Extracting simplified molecular graph (persistence = %f, filtered at %f)\n", persistence_val, filter_val);
@@ -1086,16 +1099,21 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
     MSC::ThreadedTimer timer(1);
     timer.StartGlobal();
 
-    this->m_mscbonds.clear();
-
     // now do the selection to show 0-1 arcs
     MSC::MSCSelectorLivingNodes<MSC::MSCType> *s_nodes = new MSC::MSCSelectorLivingNodes<MSC::MSCType>(m_msc);
 
     MSC::MSCSelectorNodeIndex<MSC::MSCType> *s_1saddles = new MSC::MSCSelectorNodeIndex<MSC::MSCType>(m_msc, 1);
     s_1saddles->add_parent(s_nodes);
 
-    MSC::MSCSelectorRepresentative1Saddle<MSC::MSCType> *s_r1saddles = new MSC::MSCSelectorRepresentative1Saddle<MSC::MSCType>(m_msc);
-    s_r1saddles->add_parent(s_1saddles);
+    // Oct 22, 2018. Harsh commented this filter
+    // since it seems to obstract extracting bonds when two atoms are bonded in two directions
+    #if 0
+      MSC::MSCSelectorRepresentative1Saddle<MSC::MSCType> *s_r1saddles = new MSC::MSCSelectorRepresentative1Saddle<MSC::MSCType>(m_msc);
+      s_r1saddles->add_parent(s_1saddles);
+    #else
+      auto s_r1saddles = s_1saddles;
+    #endif
+    s_r1saddles->compute_output();
 
     // here is how to actually extract arcs
     MSC::StreamlineIntegratorType *sintegrator = new MSC::StreamlineIntegratorType(m_grid, m_gridfunc, m_config->threshold_error, m_config->threshold_grad, m_config->numiter);
@@ -1103,9 +1121,6 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
     MSC::TerminateNearExtrema *extremumtermination = new MSC::TerminateNearExtrema(m_integrator->GetExtrema(), m_grid);
     sintegrator->SetAdvectionChecker(extremumtermination);
 
-    s_r1saddles->compute_output();
-
-    //printf(" i have %d saddles\n", s_r1saddles->output.size());
     // ----------------------------------------------------------
     // compute paths
     size_t pfixes = 0;
@@ -1121,7 +1136,7 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
         this->msc_get_node(bond.saddle, sdim, scidx, bond.scoords);
 
         if (debug)
-            printf(" looking at saddle %d\n", *it);
+            printf("\n\t > looking at saddle %d\n", *it);
 
         // iterate over arcs around the saddle
         MSC::MSCIteratorSurroundingArcs<MSC::MSCType> sit(m_msc);
@@ -1130,46 +1145,55 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
             INT_TYPE arcid = sit.value();
             MSC::arc<FLOATTYPE>& arc = m_msc->getArc(arcid);
 
-            if (debug)
-                printf(" - got an arc (%d -> %d)\n", arc.lower, arc.upper);
-
             // only look at saddle-minimum arcs
             if (arc.upper != *it) {
                 continue;
             }
 
-            if (debug)
-                printf(" - use the arc (%d -> %d)\n", arc.lower, arc.upper);
-
             INDEX_TYPE lowercellid = m_msc->getNode(arc.lower).cellindex;       // combinatorial says this is where we should end up
             INDEX_TYPE uppercellid = m_msc->getNode(arc.upper).cellindex;       // combinatorial says this is where we should end up
 
-            INDEX_TYPE lowervertid = m_tgrid->VertexNumberFromCellID(lowercellid);  // get vertex id in grid coordinates from combinatorial min from topological coordinates
-
             if (debug){
-                printf(" - use the arc (%d %d %f -> %d %d %f)\n",
-                       arc.lower, lowercellid, m_topofunc->cellValue(lowercellid),
-                       arc.upper, uppercellid, m_topofunc->cellValue(uppercellid));
-            }
 
+                size_t i1, i2;
+                int d1, d2;
+                INDEX_TYPE c1, c2;
+                MSC::Vec3d n1, n2;
+
+                msc_get_node(arc.lower, d1, c1, n1);
+                msc_get_node(arc.upper, d2, c2, n2);
+
+                //bool TopoMS::msc_get_node(size_t idx, int &dim, INDEX_TYPE &cellIdx, MSC::Vec3d &ncoords) const {
+                printf(" - arc: %d ([%f %f %f] %d %f) -> %d ([%f %f %f] %d %f)\n",
+                       arc.lower, n1[0],n1[1],n1[2], lowercellid, m_topofunc->cellValue(lowercellid),
+                       arc.upper, n2[0],n2[1],n2[2], uppercellid, m_topofunc->cellValue(uppercellid));
+            }
             // filtering
             if (fabs(m_topofunc->cellValue(lowercellid)) <= filter_val ||
                 fabs(m_topofunc->cellValue(uppercellid)) <= filter_val){
                 continue;
             }
 
+
+#if 1
             // 05/13/2018
             // Harsh put in a failsafe here
             // because, somehow, persistence simplification is not working properly
+
             FLOATTYPE pval = fabs(m_topofunc->cellValue(uppercellid)-m_topofunc->cellValue(lowercellid));
             if (pval < pvalue) {
                 pfixes ++;
-                continue;
-                printf(" should not find small persistence values: %f.. %d: %f, %d: %f\n",
-                          pval, arc.lower, m_topofunc->cellValue(lowercellid),
+                //continue;
+                printf(" -- WARNING: Explicitely filtered a small persistence value (%f) for nodes (%d: %f) and (%d: %f)\n",
+                          pval,
+                          arc.lower, m_topofunc->cellValue(lowercellid),
                           arc.upper, m_topofunc->cellValue(uppercellid));
                 continue;
             }
+#endif
+
+
+            INDEX_TYPE lowervertid = m_tgrid->VertexNumberFromCellID(lowercellid);  // get vertex id in grid coordinates from combinatorial min from topological coordinates
 
             vector<INDEX_TYPE> geom_combinatorial;
             m_msc->fillArcGeometry(arcid, geom_combinatorial);              // combinatorial arc geometry
@@ -1234,6 +1258,10 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
         // Harsh: used this explicit condition for proper definition of molecular graph
         if (bond.extrema.size() == 2){
             this->m_mscbonds[*it] = bond;
+        }
+        else {
+          //printf(" ignoring a bond with %d extrema!\n", bond.extrema.size());
+          //exit(1);
         }
     }
 
