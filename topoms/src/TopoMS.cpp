@@ -183,10 +183,13 @@ void TopoMS::msc_print_node(size_t idx) const {
                        (dim == 2) ? "2-sad" :
                        (dim == 3) ? "max" : "unknown";
 
-    MSC::Vec3d ncoords;
-    this->msc_cellid_to_gcoords(n.cellindex, ncoords);
+    //MSC::Vec3d ncoords;
+    //this->msc_cellid_to_gcoords(n.cellindex, ncoords);
 
-    printf(" %s (node %d, cell %d) at (%.1f %.1f %.1f) val = %f\n",
+    float ncoords[3];
+    this->msc_cellid_to_wcoords(n.cellindex, ncoords);
+
+    printf(" %s (node %d, cell %d) at (%.3f %.3f %.3f) val = %f\n",
                   type.c_str(), idx, n.cellindex,
                   ncoords[0], ncoords[1], ncoords[2], val);
 }
@@ -1279,6 +1282,7 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
     timer.PrintAll ();
     if (pfixes > 0)
         printf("   -- WARNING: explicitely filtered %d connections for persistence %f\n", pfixes, pvalue);
+
     printf("   -- # crit pts = [%d, %d, %d, %d] = %d\n", counts[0], counts[1], counts[2], counts[3],
                                                          counts[0] + counts[1] + counts[2] + counts[3] );
 

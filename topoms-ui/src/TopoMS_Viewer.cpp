@@ -458,12 +458,13 @@ void TopoMSViewer::draw_atoms(bool with_names){
     if(atoms.empty())
         return;
 
+    // names: [1, natoms-1] (both inclusive)
     const float factor = parentApp->scale_atom();
-    size_t num_atoms = atoms.size();
+    const size_t num_atoms = atoms.size();
     for(size_t i = 0; i < num_atoms; i++) {
 
         if(with_names) {
-            glPushName(1+i);    // atom numbers start with 1
+            glPushName(i);
         }
 
         qglviewer::Vec pos (atoms[i].m_pos[0], atoms[i].m_pos[1], atoms[i].m_pos[2]);
@@ -507,6 +508,7 @@ void TopoMSViewer::draw_nodes(bool with_names) {
     const size_t natoms = this->parentApp->m_mdlayer->m_atoms.size();
     const size_t nnodes = this->parentApp->m_mdlayer->msc_get_nnodes();
 
+    // names: [natoms, natoms+nnodes] (both inclusive)
     for(size_t nidx = 0; nidx < nnodes; nidx++) {
 
         if(!this->parentApp->m_mdlayer->msc_is_nodeAlive(nidx))
@@ -530,6 +532,7 @@ void TopoMSViewer::draw_nodes(bool with_names) {
         qglviewer::Vec pos (wcoords[0], wcoords[1], wcoords[2]);
         if (!show_3x3(pos))
             continue;
+
         float radius = screenRadius*this->camera()->pixelGLRatio(pos);
         draw_sphere(pos, Colorator::by_topoIndex(ndim), radius);
 
@@ -568,7 +571,7 @@ void TopoMSViewer::draw_mnodes(bool with_names) {
         this->parentApp->m_mdlayer->msc_get_node(*n, ndim, ncidx, coord);
 
         if(with_names) {
-            glPushName(1 + natoms + *n);
+            glPushName(natoms + *n);
         }
 
         float wcoords[3];
@@ -591,7 +594,7 @@ void TopoMSViewer::draw_mpaths() {
     if(!parentApp->show_mpaths())
         return;
 
-    static float periodic_cutoff = parentApp->m_mdlayer->get_periodic_cutoff(true);
+    static float periodic_cutoff = parentApp->m_mdlayer->get_periodic_cutoff(false);
     glColor3f(1, .5, .1);
     glLineWidth(1.5);
 
@@ -767,9 +770,8 @@ void TopoMSViewer::drawWithNames(){
         draw_atoms(true);
     }
     if (parentApp->m_mdlayer->msc_is_available()) {
-
-        if(parentApp->show_mnodes()){   draw_mnodes(true); }
         if(parentApp->show_tnodes()){   draw_nodes(true);  }
+        if(parentApp->show_mnodes()){   draw_mnodes(true); }
     }
 }
 
@@ -1240,31 +1242,34 @@ void TopoMSViewer::draw_bConvexHull(const std::vector<const float*> &corners){
 void TopoMSViewer::postSelection(const QPoint &point) {
 
     int sname = this->selectedName();
-    printf(" > postSelection (%d) ", sname);
+    //printf(" > postSelection (%d) ", sname);
 
     if(sname == -1){
-        printf("\n");
+        //printf("\n");
         return;
     }
 
-    size_t natoms = parentApp->m_mdlayer->m_atoms.size();
+    const size_t natoms = parentApp->m_mdlayer->m_atoms.size();
+    const size_t nnodes = parentApp->m_mdlayer->msc_get_nnodes();
 
-    if (sname <= natoms) {
+    // names: [0, natoms-1] (both inclusive) --- atoms
+    if (sname < natoms) {
         printf(" Clicked: ");       fflush(stdout);
-        parentApp->m_mdlayer->m_atoms[sname-1].print();
+        parentApp->m_mdlayer->m_atoms[sname].print(sname+1);  // atomids start from 1
 
         selectedAtoms.clear();
         selectedAtoms.insert(sname);
-        return;
     }
+    else {
 
-    sname = sname - natoms - 1;
+      sname = sname - natoms;
 
-    printf(" Clicked: ");       fflush(stdout);
-    parentApp->m_mdlayer->msc_print_node(sname);
+      printf(" Clicked: ");       fflush(stdout);
+      parentApp->m_mdlayer->msc_print_node(sname);
 
-    selectedNodes.clear();
-    selectedNodes.insert(sname);
+      selectedNodes.clear();
+      selectedNodes.insert(sname);
+    }
 }
 
 #if 0

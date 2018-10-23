@@ -136,9 +136,10 @@ public:
         return true;
     }
 
-    void print() const {
+    void print(int id = -1) const {
 
         std::cout << " Atom ";
+        if(id != -1) {              std::cout << id << ": ";                          }
         if(m_symbol != "") {        std::cout << m_symbol << " ";                     }
         if(m_atom_number != 0) {    std::cout << "[" << int(m_atom_number) << "] ";   }
         std::cout << "at (" << m_pos[0]<<", "<<m_pos[1]<<", "<<m_pos[2]<<")" << std::endl;
