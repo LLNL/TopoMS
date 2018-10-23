@@ -74,8 +74,33 @@ purposes.
 #include <algorithm>
 
 #include "MSCBond.h"
+#include "MolecularSystem.h"
 #include "MultilinearInterpolator.h"
 
+bool is_zero(const float &v) {                  return fabs(v) < 0.00001;   }
+bool compare(const float &a, const float &b) {  return is_zero(a-b);        }
+
+/// ------------------------------------------------------------------------
+void MSCBond::print() const {
+
+  printf(" Bond: %d (%f %f %f):\n", saddle, scoords[0],scoords[1],scoords[2]);
+  for(unsigned int i = 0; i < atomIds.size(); i++) {
+    printf("\t atom %d, extrema %d, pos (%f %f %f), path = %d\n",
+              atomIds[i], extrema[i], ecoords[i][0],ecoords[i][1],ecoords[i][2], paths[i].size());
+  }
+}
+
+bool MSCBond::check2() const {
+
+    if (atomIds.size() != 2 || extrema.size() != 2 || ecoords.size() != 2 || paths.size() != 2) {
+        printf(" Bond %d does not attach to 2 extrema. sizes = [%d %d, %d %d]\n",
+               saddle, paths.size(), atomIds.size(), extrema.size(), ecoords.size());
+        return false;
+    }
+    return true;
+}
+
+/// ------------------------------------------------------------------------
 // TODO: this should go in utils
 void MSCBond::fix_periodic(MSC::Vec3d &p, const MSC::Vec3d &orig, const size_t dims[3]) {
 
@@ -89,6 +114,67 @@ void MSCBond::fix_periodic(MSC::Vec3d &p, const MSC::Vec3d &orig, const size_t d
     }
 }
 
+/// ------------------------------------------------------------------------
+void MSCBond::parameterize(const MS::SystemInfo &metadata) {
+
+    if (!this->check2()){
+        return;
+    }
+
+    // make sure atom ids are in increasing order
+    if (atomIds[1] < atomIds[0]) {
+      std::swap(atomIds[0], atomIds[1]);
+      std::swap(extrema[0], extrema[1]);
+      std::swap(ecoords[0], ecoords[1]);
+      std::swap(paths[0], paths[1]);
+    }
+
+    const size_t gdims[3] = {metadata.m_grid_dims[0],metadata.m_grid_dims[1],metadata.m_grid_dims[2]};
+
+    // convert saddle position to world coordinates
+    float sgcoords[3] = {scoords[0],scoords[1],scoords[2]};
+    float swcoords[3];
+    metadata.grid_to_world(sgcoords, swcoords);
+
+    //printf(" \n --> Parameterizing ");  this->print();
+
+    parameterization.clear();
+    for(uint8_t k = 0; k < 2; k++) {
+
+        const std::vector<MSC::Vec3d>& path = this->paths[k];
+        for(uint8_t i = 0; i < path.size(); i++) {
+
+            MSC::Vec3d pp = path[i];
+
+            // fix periodic
+            fix_periodic(pp, scoords, gdims);
+
+            // convert p to world coordinates
+            float pgcoords[3] = {pp[0],pp[1],pp[2]};
+            float pwcoords[3];
+            metadata.grid_to_world(pgcoords, pwcoords);
+
+            float diff[3] = {pwcoords[0]-swcoords[0], pwcoords[1]-swcoords[1], pwcoords[2]-swcoords[2]};
+            float p = std::sqrt(diff[0]*diff[0] + diff[1]*diff[1] + diff[2]*diff[2]);
+
+            if (k == 0) p *= -1;
+
+            if(parameterization.size() > 0) {
+                if (compare(p, parameterization.back().first))
+                    continue;
+            }
+            parameterization.push_back(std::pair<float, MSC::Vec3d>(p, path[i]));
+        }
+
+        if (k == 0)
+            std::reverse(parameterization.begin(), parameterization.end());
+    }
+    return;
+    for(int k = 0; k < parameterization.size(); k++)
+        printf(" %f, (%f %f %f)\n", parameterization[k].first, parameterization[k].second[0], parameterization[k].second[1], parameterization[k].second[2]);
+}
+
+/// ------------------------------------------------------------------------
 void MSCBond::get_points_idx(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[3], int pidx) const {
 
     if (pidx == -1) {
@@ -134,42 +220,7 @@ void MSCBond::get_points(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, cons
     return get_points_idx(origin, nbrs, dims, int(dmap.begin()->second));
 }
 
-void MSCBond::parameterize(const size_t dims[3]) {
-
-    if (!this->check2()){
-        return;
-    }
-
-    parameterization.clear();
-    for(unsigned int k = 0; k < 2; k++) {
-
-        const std::vector<MSC::Vec3d>& path = this->paths[k];
-        for(unsigned int i = 0; i < path.size(); i++) {
-
-            MSC::Vec3d pp = path[i];
-
-            // fix periodic
-            fix_periodic(pp, scoords, dims);
-
-            float p = (pp-scoords).Mag();
-            if (k == 0) p *= -1;
-
-            if(parameterization.size() > 0) {
-                // TODO: float comparison should move to utils
-                if (fabs(p-parameterization.back().first) < 0.00001)
-                    continue;
-            }
-            parameterization.push_back(std::pair<float, MSC::Vec3d>(p, path[i]));
-        }
-
-        if (k == 0)
-            std::reverse(parameterization.begin(), parameterization.end());
-    }
-    return;
-    for(int k = 0; k < parameterization.size(); k++)
-        printf(" %f, (%f %f %f)\n", parameterization[k].first, parameterization[k].second[0], parameterization[k].second[1], parameterization[k].second[2]);
-}
-
+/// ------------------------------------------------------------------------
 void MSCBond::study_value(const double *func, const size_t dims[], std::vector<std::pair<float, float>> &vals) const {
 
     vals.clear();
@@ -185,3 +236,5 @@ void MSCBond::study_value(const double *func, const size_t dims[], std::vector<s
         vals[i] = std::make_pair(x,y);
     }
 }
+
+/// ------------------------------------------------------------------------

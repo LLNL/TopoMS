@@ -78,9 +78,9 @@ purposes.
 #include "basic_types.h"
 #include "vectors.h"
 
-/// -----------------------------------------------------------------------
-/// Forward declaration done!
-/// -----------------------------------------------------------------------
+namespace MS {
+class SystemInfo;
+}
 
 /**
   *  @brief This struct provides a colleciton of utilities to handle MSC bonds
@@ -100,21 +100,15 @@ struct MSCBond {
 
     double ichg, iarea;
 
-    MSCBond(INT_TYPE _saddle=-1) : saddle(_saddle), ichg(-1), iarea(-1) {}
-
-    bool check2() const {
-        if (this->paths.size() != 2 || this->atomIds.size() != 2 ||
-            this->extrema.size() != 2 || this->ecoords.size() != 2) {
-            printf(" Bond %d does not attach to 2 extrema. sizes = [%d %d, %d %d]\n",
-                   this->saddle, this->paths.size(), this->atomIds.size(), this->extrema.size(), this->ecoords.size());
-            return false;
-        }
-        return true;
-    }
-
+    // -------------------------------------------------------------------------
     static void fix_periodic(MSC::Vec3d &p, const MSC::Vec3d &orig, const size_t dims[3]);
 
-    void parameterize(const size_t dims[3]);
+    // -------------------------------------------------------------------------
+    MSCBond(INT_TYPE _saddle=-1) : saddle(_saddle), ichg(-1), iarea(-1) {}
+
+    void print() const;
+    bool check2() const;
+    void parameterize(const MS::SystemInfo &metadata);
     void get_points(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], float p) const;
     void get_points_idx(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], int pidx) const;
     void study_value(const double *func, const size_t dims[3], std::vector<std::pair<float, float> > &vals) const;

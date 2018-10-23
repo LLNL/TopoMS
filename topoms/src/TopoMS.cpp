@@ -1286,13 +1286,11 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
     printf("   -- # crit pts = [%d, %d, %d, %d] = %d\n", counts[0], counts[1], counts[2], counts[3],
                                                          counts[0] + counts[1] + counts[2] + counts[3] );
 
-    const size_t gdims[3] = {this->m_metadata.m_grid_dims[0],this->m_metadata.m_grid_dims[1],this->m_metadata.m_grid_dims[2]};
-
     Utils::print_separator();
     printf("\n -- Parameterizing MSC bonds...");
     fflush(stdout);
     for(auto iter = this->m_mscbonds.begin(); iter != this->m_mscbonds.end(); iter++)
-        iter->second.parameterize(gdims);
+        iter->second.parameterize(m_metadata);
     printf(" Done!\n");
 
     // use vtk to compute cross sectional areas for Bader regions
