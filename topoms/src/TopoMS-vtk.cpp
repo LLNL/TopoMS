@@ -546,82 +546,109 @@ bool TopoMS::refresh_orthogonalSlice(int saddleNodeId, int param/*=0*/, int minp
 
 /// --------------------------------------------------------------------------------------
 /**
-  *   @brief  Gather statistics of Bader areas along orthogonal slices
+  *   @brief  Analyze molecular bonds
   */
-void TopoMS::compute_baderAreas() {
-
-#ifndef USE_VTK
-    printf("TopoMS::compute_baderAreas. VTK not available\n");
-#else
-    // create a slicer
-    // for each saddle
-    // compute for each point along the path
-    // integrate the area
-    // save for the saddle
-
-    printf(" -- Gathering statistics on Bader areas...");
-    fflush(stdout);
+void TopoMS::analyze_bonds() {
 
     bool debug = false;
+
+    // ---------------------------------------------------------------------
+    // upon computation, the integrated areas and function values are simply "sums"
+    // now, i need to convert them into physical units
+    // i am using the same conversion as I do in the bader analysis
+    // that is, treating each point on the slice as a full 3D voxel
+    // this is only an apporximation, since depending upon the orientation of the slice,
+    // this can be more or less accurate!
+    // ---------------------------------------------------------------------
+
+    const size_t gdims[3] = {this->m_metadata.m_grid_dims[0],this->m_metadata.m_grid_dims[1],this->m_metadata.m_grid_dims[2]};
+    const size_t num_gridPts = m_metadata.grid_sz();
+
+    const FLOATTYPE vol_box = m_metadata.volume_box();
+    const FLOATTYPE vol_voxel = m_metadata.volume_voxel();
+
+    const FLOATTYPE file_to_ae = m_metadata.volume_file2Angs() * m_metadata.charge_file2electrons();
+    const FLOATTYPE chgDens_fileUnit2e = (this->m_inputtype == IT_CUBE ? vol_box * file_to_ae : 1.0) / (FLOATTYPE) num_gridPts;
+
+    printf(" -- Analyzing bond properties...");
+    fflush(stdout);
+
     if(debug)
         printf("\n");
 
+#ifdef USE_VTK
+    // we create a single slicer that we move along the bond
     vtkVolumeSlicer *slicer = new vtkVolumeSlicer();
     slicer->set_volume(this->m_vtkFunction);
 
-    const size_t gdims[3] = {gdims[0],gdims[1],gdims[2]};
+    // return value of integrate function
+    std::pair<double,double> res;
+#endif
 
+    // let's go over all the bonds
     for(auto iter = this->m_mscbonds.begin(); iter != this->m_mscbonds.end(); iter++) {
 
         MSCBond &bond = iter->second;
+        const size_t nparams = bond.parameterization.size();
+
         if(debug)
             printf("\n saddle %d\n", bond.saddle);
 
+#ifdef USE_VTK
+        // first, analyze the mid point (the saddle)
         MSC::Vec3d origin;
         std::vector<MSC::Vec3d> nbrs;
         nbrs.reserve(2);
 
         bond.get_points_idx(origin, nbrs, gdims, -1);
 
+        // compute, filter, and integrate the slice
         TopoMS::compute_slice(origin, nbrs, slicer);
         this->filter_slice(slicer, bond.atomIds);
-        std::pair<double,double> res = this->integrate_slice(slicer);
-        bond.iarea = res.first;
-        bond.ichg = res.second;
+        res = this->integrate_slice(slicer);
+
+        bond.iarea = vol_voxel*res.first;
+        bond.ichg  = chgDens_fileUnit2e*res.second;
 
         if(debug)
             printf(" %d : %f %f\n", bond.saddle, bond.iarea, bond.ichg);
 
-        #if 0
-        for(size_t i = 0; i < bond.parameterization.size(); i++) {
+        bond.bichg.resize(nparams);
+        bond.biarea.resize(nparams);
+#endif
 
-            float x = bond.parameterization[i].first;
-            std::vector<double> atomAreas;
+        bond.bchg.resize(nparams);
 
-            MSC::Vec3d origin;
-            std::vector<MSC::Vec3d> nbrs;
-            nbrs.reserve(2);
+        for(size_t i = 0; i < nparams; i++) {
 
-            bond.get_points(origin, nbrs, int(i), gdims);
-            this->compute_slice(origin, nbrs, slicer);
+            // the bond parameterized value and point
+            const float x = bond.parameterization[i].first;
+            const MSC::Vec3d &p = bond.parameterization[i].second;
 
+#ifdef USE_VTK
+            // get the point and neighbors for this point on the bond
+            bond.get_points_idx(origin, nbrs, gdims, int(i));
+                // origin will always be the same as p
+
+            // compute, filter, and integrate the slice
+            TopoMS::compute_slice(origin, nbrs, slicer);
             this->filter_slice(slicer, bond.atomIds);
-            this->integrate_area(slicer, bond.atomIds, atomAreas);
+            res = this->integrate_slice(slicer);
 
-            /*
-            printf(" %f ==> ", x);
-            for(size_t k = 0; k < atomAreas.size(); k++)
-                printf(" [%d : %f]", bond.atomIds[k], atomAreas[k]);
-            printf("\n");*/
+            bond.biarea[i] = vol_voxel*res.first;
+            bond.bichg[i]  = chgDens_fileUnit2e*res.second;
+#endif
+            // ok, now, also note the actual value at this point
+            double pos[3] = {p[0], p[1], p[2]};
+            bond.bchg[i] = MultilinearInterpolator::trilinear_interpolation(pos, m_baderfunc, gdims);
+            bond.bchg[i] *= chgDens_fileUnit2e*(this->m_negated ? -1.0 : 1.0);
         }
-        #endif
     }
     printf(" Done!\n");
+#ifdef USE_VTK
     delete slicer;
 #endif
 }
-
-
 
 /// --------------------------------------------------------------------------------------
 /// --------------------------------------------------------------------------------------

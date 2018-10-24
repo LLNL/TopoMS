@@ -1,5 +1,7 @@
-import argparse
 import re
+import argparse
+import numpy as np
+
 class BondInfo:
 
     def __init__(self):
@@ -13,8 +15,11 @@ class BondInfo:
 
         self.area = 0
         self.chg = 0
+        
         self.p = []
-        self.y = []
+        self.val = []
+        self.ichg = []
+        self.iarea = []
 
     def title(self):
         return '[{}-{} == {}-{}]'.format(self.atomsymb[0], self.atomid[0], self.atomsymb[1], self.atomid[1])
@@ -29,7 +34,7 @@ class BondInfo:
         self.atompos[0],self.atompos[1] = self.atompos[1],self.atompos[0]
 
         self.p = list(reversed(self.p))
-        self.y = list(reversed(self.y))
+        self.val = list(reversed(self.val))
 
     def disp(self):
         print 'bond', self.id, 'connects to', self.atomid, ':', self.atomsymb, ':',
@@ -39,7 +44,9 @@ class BondInfo:
         print ' #vals =', l,
         if l > 0:
             print ': [', min(self.p), max(self.p), ']',
-            print '[', min(self.y), max(self.y), ']'
+            print '[', min(self.val), max(self.val), ']',
+            print '[', min(self.ichg), max(self.ichg), ']',
+            print '[', min(self.iarea), max(self.iarea), ']'
         else:
             print ''
 
@@ -103,14 +110,15 @@ def read_bondStats(infilename):
         elif len(l) > 0:
             l = [float(k) for k in l.split(',')]
             s.p.append(l[0])
-            s.y.append(l[1])
+            s.val.append(l[1])
+            s.ichg.append(l[2])
+            s.iarea.append(l[3])
 
         lidx += 1
 
     s.organize(['Ca'], ['Cl'])
     s.disp()
     bonds.append(s)
-
 
     #print 'read', len(bonds), 'bonds'
     return bonds
@@ -130,17 +138,29 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     colors = ['black', 'red', 'green', 'blue', 'yellow', 'cyan']
 
+    i = 0
     plt.figure(figsize=(8,6))
     for s in bonds:
+        
+        #if s.atomid[0] != 1:
+        #    continue
 
-        plt.semilogy(s.p, s.y,linewidth=1, linestyle='--', label=s.title())
-
+        plt.semilogy(np.array(s.p), np.array(s.val), linewidth=1, linestyle='--', label=s.title())
+        
+        plt.semilogy(np.array(s.p), np.array(s.ichg), linewidth=1, linestyle='--', label=s.title())
+        #plt.semilogy(np.array(s.p), np.array(s.iarea), linewidth=1, linestyle='--', label=s.title())
+        
+        #plt.semilogy(np.array(s.p), np.array(s.y) + 0.001*i, linewidth=1, linestyle='--', label=s.title())
+        #plt.plot(np.array(s.p), np.array(s.y) + 0.001*i, linewidth=1, linestyle='--', label=s.title())
+        
         #nx = len([p for p in s.p if p < 0])
         #plt.semilogy(s.p[:nx], s.y[:nx],linewidth=2)#,color=colors[s.ids[1]-1])
         #plt.semilogy(s.p[nx:], s.y[nx:],linewidth=2)#,color=colors[s.ids[2]-1])
+        
+        i = i+1
 
     plt.title(args.infile[0])
-    plt.legend()
+    #plt.legend(loc=3)
     plt.ylabel('charge')
     plt.xlabel('distance from saddle along bond path')
     #plt.show()

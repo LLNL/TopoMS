@@ -87,18 +87,31 @@ class SystemInfo;
   */
 struct MSCBond {
 
-    INT_TYPE saddle;                // saddle node id
-    MSC::Vec3d scoords;             // saddle's MSC coords
+    // saddle node id and MSC coordinates
+    INT_TYPE saddle;
+    MSC::Vec3d scoords;
 
-    std::vector<INT_TYPE> extrema;  // the extrema this saddle is attached to
-    std::vector<MSC::Vec3d> ecoords;// the extrema's MSC coords
+    // extrema ids and MSC coordiantes
+    std::vector<INT_TYPE> extrema;
+    std::vector<MSC::Vec3d> ecoords;
 
-    std::vector<size_t> atomIds;    // the corresponding atoms (starting with 1)
+    // the corresponding atoms (starting with 1)
+    std::vector<size_t> atomIds;
 
-    std::vector<std::vector<MSC::Vec3d>> paths;  // geometric representation of paths
+    // geometric representation of paths
+    std::vector<std::vector<MSC::Vec3d>> paths;
+
+    // parameterization of the path
     std::vector<std::pair<float, MSC::Vec3d>> parameterization;
 
+    // integrated charge and area (at the saddle)
     double ichg, iarea;
+
+    // integrated charge and area along the path (indexed into the parameterization)
+    std::vector<double> bichg, biarea;
+
+    // charge at the bond path
+    std::vector<double> bchg;
 
     // -------------------------------------------------------------------------
     static void fix_periodic(MSC::Vec3d &p, const MSC::Vec3d &orig, const size_t dims[3]);
@@ -111,7 +124,6 @@ struct MSCBond {
     void parameterize(const MS::SystemInfo &metadata);
     void get_points(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], float p) const;
     void get_points_idx(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], int pidx) const;
-    void study_value(const double *func, const size_t dims[3], std::vector<std::pair<float, float> > &vals) const;
 };
 
 #endif

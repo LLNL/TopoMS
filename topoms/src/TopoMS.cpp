@@ -1294,8 +1294,7 @@ void TopoMS::extract_mgraph(FLOATTYPE pvalue, FLOATTYPE fvalue) {
     printf(" Done!\n");
 
     // use vtk to compute cross sectional areas for Bader regions
-    this->compute_baderAreas();
-
+    this->analyze_bonds();
     Utils::print_separator();
 }
 
@@ -1536,23 +1535,6 @@ void TopoMS::write_msc_bond_stats(const std::string &filename) const {
         return;
     }
 
-    // ---------------------------------------------------------------------
-    // upon computation, the integrated areas and function values are simply "sums"
-    // now, i need to convert them into physical units
-    // i am using the same conversion as I do in the bader analysis
-    // that is, treating each point on the slice as a full 3D voxel
-    // this is only an apporximation, since depending upon the orientation of the slice,
-    // this can be more or less accurate!
-
-    const size_t gdims[3] = {this->m_metadata.m_grid_dims[0],this->m_metadata.m_grid_dims[1],this->m_metadata.m_grid_dims[2]};
-    const size_t num_gridPts = m_metadata.grid_sz();
-
-    const FLOATTYPE vol_box = m_metadata.volume_box();
-    const FLOATTYPE vol_voxel = m_metadata.volume_voxel();
-
-    const FLOATTYPE file_to_ae = m_metadata.volume_file2Angs() * m_metadata.charge_file2electrons();
-    const FLOATTYPE chgDens_fileUnit2e = (this->m_inputtype == IT_CUBE ? vol_box * file_to_ae : 1.0) / (FLOATTYPE) num_gridPts;
-
     size_t scnt = 0;
     for(auto iter = this->m_mscbonds.begin(); iter != this->m_mscbonds.end(); iter++) {
 
@@ -1573,13 +1555,17 @@ void TopoMS::write_msc_bond_stats(const std::string &filename) const {
                         m_atoms[a-1].m_pos[0], m_atoms[a-1].m_pos[1], m_atoms[a-1].m_pos[2]);
         }
 
-        fprintf(outfile, "   iarea %f, ichg %f\n", vol_voxel*bond.iarea, chgDens_fileUnit2e*bond.ichg);
+        fprintf(outfile, "   iarea %f, ichg %f\n", bond.iarea, bond.ichg);
 
-        std::vector<std::pair<float, float>> vals;
-        bond.study_value(m_baderfunc, gdims, vals);
+        const size_t nparams = bond.parameterization.size();
+        for(size_t i = 0; i < nparams; i++){
 
-        for(unsigned k = 0; k < vals.size(); k++)
-            fprintf(outfile, "% 08.5f, %.6E\n", vals[k].first, chgDens_fileUnit2e*(this->m_negated ? -1.0*vals[k].second : vals[k].second));
+            const double &x = bond.parameterization[i].first;
+            const double &y = bond.bchg[i];
+            const double ic = (bond.bichg.empty())  ? 0 : bond.bichg[i];
+            const double ia = (bond.biarea.empty()) ? 0 : bond.biarea[i];
+            fprintf(outfile, "% 08.5f, %.6E, %.6E, %.6E\n", x,y,ic,ia);
+        }
     }
 
     fclose(outfile);

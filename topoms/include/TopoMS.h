@@ -328,7 +328,7 @@ public:
     void extract_lpot_nbrhood(FLOATTYPE pvalue, FLOATTYPE fvalue, float gpos[], unsigned cp_idx);
     void extract_lpot_nbrhood_li(FLOATTYPE pvalue, FLOATTYPE fvalue);
 
-    void compute_baderAreas();
+    void analyze_bonds();
 
     // ----------------------------------------------------------------------
     // interface with bader analysis
@@ -339,11 +339,9 @@ public:
     int bader_get_atomLabeling(size_t x, size_t y, size_t) const;
     int bader_get_atomLabeling(double pos[3]) const;
 
-
     // ----------------------------------------------------------------------
     // interface with the msc library
     // ----------------------------------------------------------------------
-
     bool msc_is_available() const;
     size_t msc_get_nnodes() const;
     size_t msc_get_narcs() const;

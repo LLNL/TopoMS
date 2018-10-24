@@ -201,6 +201,7 @@ void MSCBond::get_points_idx(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, 
     }
 }
 
+/// ------------------------------------------------------------------------
 void MSCBond::get_points(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[3], float p) const {
 
     // TODO: float comparison should move to utils
@@ -218,23 +219,6 @@ void MSCBond::get_points(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, cons
     }
 
     return get_points_idx(origin, nbrs, dims, int(dmap.begin()->second));
-}
-
-/// ------------------------------------------------------------------------
-void MSCBond::study_value(const double *func, const size_t dims[], std::vector<std::pair<float, float>> &vals) const {
-
-    vals.clear();
-    vals.resize(this->parameterization.size());
-    for(size_t i = 0; i < this->parameterization.size(); i++) {
-
-        float x = this->parameterization[i].first;
-
-        const MSC::Vec3d &p = this->parameterization[i].second;
-        double pos[3] = {p[0], p[1], p[2]};
-
-        double y = MultilinearInterpolator::trilinear_interpolation(pos, func, dims);
-        vals[i] = std::make_pair(x,y);
-    }
 }
 
 /// ------------------------------------------------------------------------
