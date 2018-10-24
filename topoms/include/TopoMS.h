@@ -408,10 +408,11 @@ public:
 
     void write_msc() const {
 
-        char fpers[10];
+        char fpers[10], ffilt[10];
         sprintf(fpers, "%.4f", get_persistence());
-        write_mgraph_vtp(m_config->infilename+"-MolecularGraph_"+std::string(fpers)+".vtp");
-        write_msc_bond_stats(m_config->infilename+"-MolecularBondStats_"+std::string(fpers)+".txt");
+        sprintf(ffilt, "%.4f", get_filterval());
+        write_mgraph_vtp(m_config->infilename+"-MolecularGraph_"+std::string(fpers)+"_"+std::string(ffilt)+".vtp");
+        write_msc_bond_stats(m_config->infilename+"-MolecularBondStats_"+std::string(fpers)+"_"+std::string(ffilt)+".txt");
     }
 
     // ----------------------------------------------------------------------
