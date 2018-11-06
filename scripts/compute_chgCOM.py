@@ -1,3 +1,4 @@
+import os
 import sys
 import numpy as np
 import argparse
@@ -6,11 +7,17 @@ from VASPutils import readCAR
 import matplotlib.pyplot as plt
 
 # ------------------------------------------------------------------------------
+# VTK I/O
 # ------------------------------------------------------------------------------
 def read_vti(filename, fieldname):
 
+    if not os.path.isfile(filename):
+        raise Exception('File ({}) not found'.format(filename))
+
     import vtk
     from vtk.util import numpy_support
+
+    print ' --> Reading ({}) from ({})'.format(fieldname, filename)
 
     reader = vtk.vtkXMLImageDataReader()
     reader.SetFileName(filename)
@@ -23,10 +30,10 @@ def read_vti(filename, fieldname):
 
 def write_vtp(filename, data):
 
-    print 'writing', filename
     import vtk
     from vtk.util import numpy_support
 
+    print ' --> Writing ({})'.format(filename)
 
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetFileName(filename)
@@ -43,7 +50,7 @@ def write_vtp(filename, data):
     for key in data.keys():
 
         pdata = data[key]
-        print key, '-->', kid, len(pdata)
+        #print key, '-->', kid, len(pdata)
 
         for p in pdata:
             points.InsertNextPoint(p[0],p[1],p[2])
@@ -70,7 +77,32 @@ def write_vtp(filename, data):
     writer.SetInputData(polydata)
     writer.Write()
 
+# ------------------------------------------------------------------------------
+# text output of cocg
+# ------------------------------------------------------------------------------
+def write_chgcom(filename, apos, cpos):
 
+    print 'Writing', filename, '...',
+    sys.stdout.flush()
+    fp = open(filename, 'w')
+
+    fp.write(" %4s %11s %11s %11s %13s %13s %13s %13s\n" %
+                ("#", "X", "Y", "Z", "cX", "cY", "cZ", "magn(c)"));
+    fp.write("-------------------------------------------------------------------------------------------------\n")
+
+    for k in xrange(natoms):
+        a = apos[k]
+        c = cpos[k]
+        fp.write(" %4s %11.6f %11.6f %11.6f %+1.6e %+1.6e %+1.6e %+1.6e\n" %
+                    (k, a[0], a[1], a[2], c[0], c[1], c[2], np.linalg.norm(np.array(c))));
+
+        #0:+1.2f
+
+    fp.write("-------------------------------------------------------------------------------------------------\n")
+    fp.close()
+    print 'Done!'
+
+# ------------------------------------------------------------------------------
 def periodic_displacement(a, b, dims):
 
     debug = False
@@ -98,32 +130,11 @@ def periodic_displacement(a, b, dims):
         print disp
     return disp
 
-def write_chgcom(filename, apos, cpos):
-
-    print 'Writing', filename, '...',
-    sys.stdout.flush()
-    fp = open(filename, 'w')
-
-    fp.write(" %4s %11s %11s %11s %13s %13s %13s %13s\n" %
-                ("#", "X", "Y", "Z", "cX", "cY", "cZ", "magn(c)"));
-    fp.write("-------------------------------------------------------------------------------------------------\n")
-
-    for k in xrange(natoms):
-        a = apos[k]
-        c = cpos[k]
-        fp.write(" %4s %11.6f %11.6f %11.6f %+1.6e %+1.6e %+1.6e %+1.6e\n" %
-                    (k, a[0], a[1], a[2], c[0], c[1], c[2], np.linalg.norm(np.array(c))));
-
-        #0:+1.2f
-
-    fp.write("-------------------------------------------------------------------------------------------------\n")
-    fp.close()
-    print 'Done!'
-
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 if __name__ == '__main__':
 
+    # --------------------------------------------------------------------------
     parser = argparse.ArgumentParser(description='Compute charge center of mass using Bader analysis done through TopoMS')
     parser.add_argument('--infile', metavar='(infile)', required=True, nargs=1, help='Input CHGCAR file')
     args = parser.parse_args()
@@ -133,6 +144,7 @@ if __name__ == '__main__':
     volfilename = chgVASPfilename+'-Atoms2Vol.vti'
     periodic = True
 
+    # --------------------------------------------------------------------------
     # read chgcar file to get data about atomic position
     # we read function values from vti, hence pass False at the end
     (sysname, scalingfactor, lattice, species, atompos, grid, data) = readCAR(chgVASPfilename, False)
@@ -158,8 +170,9 @@ if __name__ == '__main__':
     grid = np.array(grid)
     pdims = direct2phys([1.0,1.0,1.0])
     spacings = grid2phys([1,1,1])
-    #spacings = np.array([pdims[i]/(grid[i]-1+int(periodic)) for i in [0,1,2]])
+
     voxvol = spacings.prod()
+    chgDens_fileUnit2e = 1.0 / float(grid[0]*grid[1]*grid[2]);
 
     # atoms in CHGCAR files are given in direct coordinates ([0,1])
     # convert them to physical coordinates
@@ -167,40 +180,38 @@ if __name__ == '__main__':
     atompos = np.array([direct2phys(apos) for apos in atompos])
 
     # volumes and charge
-    chg = read_vti(chgVTIfilename, 'charge') * voxvol     # convert from density to charge!
+    chg = read_vti(chgVTIfilename, 'charge') * chgDens_fileUnit2e   # convert from density to charge!
     vol = read_vti(volfilename, 'atom_labeling')
 
     # print info about the data
-    print 'lattice  =', pdims
-    print 'grid     =', grid
-    print 'spacings =', spacings
-    print 'voxvol   =', voxvol
-    print 'species  =', species
-    print 'charge   =', chg.shape, chg.dtype, chg.min(), chg.max()
-    print 'labels   =', vol.shape, vol.dtype, np.unique(vol)
-    print 'atom pos =\n', atompos
+    print '\tLattice  =', pdims
+    print '\tGrid     =', grid
+    print '\tSpacings =', spacings
+    print '\tVox vol  =', voxvol
+    print '\tSpecies  =', species
+    print '\tSharge   =', chg.shape, chg.dtype, chg.min(), chg.max()
+    print '\tLabels   =', vol.shape, vol.dtype, np.unique(vol)
+    print '\tAtom pos =\n', atompos
 
     assert(natoms == len(np.unique(vol)))
     assert(chg.shape[0] == grid[0] and chg.shape[1] == grid[1] and chg.shape[2] == grid[2])
     assert(vol.shape[0] == grid[0] and vol.shape[1] == grid[1] and vol.shape[2] == grid[2])
 
-    #plt.imshow(vol[50,:,:])
-    #plt.colorbar()
-    #plt.show()
+    # --------------------------------------------------------------------------
+    # for each Bader region (each atom)
 
-    # ------------------------------------------------------------------------------
-    # count pixels and sum charge for each atom
-    #natoms = 2
-    # count of pixels within a Bader volume for every atom
-    bcounts = np.zeros(natoms, np.int)
+    # total number of pixels
+    anpixels = np.zeros(natoms, np.int)
+
+    # total charge
+    ascharges = np.zeros(natoms)
+
+    # net displacement of all pixels (with respect to the atom)
+    asdisps   = np.zeros([natoms, 3])
 
     # center of charge gravity
         # weighted sum of positions of all pixels (with respect to the atom)
-    cocg    = np.zeros([natoms, 3])
-
-    # sum of displacement of all pixels (with respect to the atom)
-    pdisps   = np.zeros([natoms, 3])
-    #pdipoles = np.zeros([natoms, 3])
+    acocg    = np.zeros([natoms, 3])
 
     # go over all pixels
     for z in xrange(grid[2]):
@@ -214,30 +225,32 @@ if __name__ == '__main__':
                 ppix = grid2phys([x,y,z])
 
                 # i cant simply add pixels, because of periodic boundary
-                # so, compute the pixel position with respect to the atom
+                # so, compute the displacement with respect to the atom
                 disp = periodic_displacement(ppix, apos, pdims)
-                #ppix = disp #+ apos
 
-                bcounts[l] += 1
-                cocg[l]    += c*disp
-                pdisps[l]  += disp
+                anpixels[l]  += 1
+                ascharges[l] += c
+                asdisps[l]   += disp
+                acocg[l]     += c*disp
 
-    print '   coc-gravity   :\n', cocg
-    print '   pdisps        :\n', pdisps
+    '''
+    print '   bcnts         :\n', anpixels
+    print '   ascharges     :\n', ascharges
+    print '   asdisps       :\n', asdisps
+    print '   coc-gravity   :\n', acocg
+    '''
 
+    anpixels = anpixels.astype(np.float32)
     for k in xrange(natoms):
-        cocg[k]    /= bcounts[k]
-        #pdipoles[k] = atompos[k]-cocg[k]
+        acocg[k]   /= anpixels[k]
+        asdisps[k] /= anpixels[k]
+        anpixels[k] *= voxvol       # convert to physical volume
 
-    print '\nper atom:'
-    print '   #grid points  :', bcounts
-    print '   coc-gravity   :\n', cocg
-    print '   pdisps        :\n', pdisps
-    #print '   chg-weighted displacements:\n', pdisps
-    #print '   dipoles                   :\n', pdipoles
+    for i in xrange(natoms):
+        print 'Atom {} at {}: chg = {}, vol = {}, avg_disp {}, cocg = {}'.format(
+                        i+1, atompos[i], ascharges[i], anpixels[i], asdisps[i], acocg[i])
 
-    #write_vtp("points_0.vtp", {"0orig": torig, "1per": tperd, "2disp": tdisp})
     fname = volfilename[:-4] + '-chgcog.txt'
-    write_chgcom(fname, atompos, cocg)
+    write_chgcom(fname, atompos, acocg)
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

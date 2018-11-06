@@ -1,11 +1,9 @@
 # Read VASP CAR format (CHGCAR, AECCAR, LOCPOT) and write the field as a vti file!
-
-from sys import argv,exit
 import numpy
 import argparse
 
-from pyevtk.hl import imageToVTK
 from VASPutils import readCAR
+from pyevtk.hl import imageToVTK
 
 # ---------------------------------------------
 parser = argparse.ArgumentParser(description='Read a CAR file and write as vti')

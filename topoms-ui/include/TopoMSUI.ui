@@ -470,7 +470,7 @@
      </widget>
      <widget class="QCheckBox" name="cb_slicelog">
       <property name="enabled">
-       <bool>true</bool>
+       <bool>false</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -495,7 +495,7 @@
      </widget>
      <widget class="QCheckBox" name="cb_saddleSlice">
       <property name="enabled">
-       <bool>true</bool>
+       <bool>false</bool>
       </property>
       <property name="geometry">
        <rect>
@@ -539,13 +539,16 @@
       <property name="text">
        <string>Slice location (wrt bcp)</string>
       </property>
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
       <property name="wordWrap">
        <bool>true</bool>
       </property>
      </widget>
      <widget class="QSlider" name="sslider">
       <property name="enabled">
-       <bool>true</bool>
+       <bool>false</bool>
       </property>
       <property name="geometry">
        <rect>

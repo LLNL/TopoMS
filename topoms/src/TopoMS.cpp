@@ -585,7 +585,7 @@ bool TopoMS::bader() {
     const std::vector<INDEX_TYPE> &extrema = m_integrator->GetExtrema();
 
     const size_t numextrema = extrema.size();
-    INDEX_TYPE numlabels = m_volumelabeling->GetNumLabels();
+    const INDEX_TYPE numlabels = m_volumelabeling->GetNumLabels();
 
     // ---------------------------------------------------------------------
     // atom--extrema mapping

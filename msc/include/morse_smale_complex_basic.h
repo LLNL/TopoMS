@@ -287,7 +287,10 @@ namespace MSC {
             n.destroyed = INT_INFTY;
             n.firstarc = NULLID;
             n.boundary = mMesh->boundaryValue(cellID);
-            //printf("n.boundary = %d\n", n.boundary);
+
+             //if (n.cellindex == 23436 || n.cellindex == 23652)
+             //printf("n.cellindex = %d, n.boundary = %d\n", n.cellindex, n.boundary);
+             
             //if (n.boundary) {
             //	INDEX_TYPE coords[3];
             //	sgg->getCoords(coords, cellID);
@@ -1235,5 +1238,3 @@ namespace MSC {
 
 }   // end of namespace
 #endif
-
-

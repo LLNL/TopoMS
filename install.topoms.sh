@@ -94,10 +94,11 @@ if ! ls $testfile 1> /dev/null 2>&1 ; then
 
     echo '     > Configuring VTK'
     rm $PATH_Ext/vtk.cmake.log 2>/dev/null
-    cmake -DCMAKE_BUILD_TYPE=Release \
-          -DBUILD_SHARED_LIBS=OFF \
-          -DVTK_USE_CXX11_FEATURES=ON \
-          -DCMAKE_INSTALL_PREFIX=$PATH_Ext \
+    cmake -DCMAKE_INSTALL_PREFIX=$PATH_Ext \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_SHARED_LIBS:BOOL=OFF \
+          -DVTK_WRAP_PYTHON:BOOL=ON \
+          -DVTK_USE_CXX11_FEATURES:BOOL=ON \
           .. > $PATH_Ext/vtk.cmake.log
 
     echo '     > Building VTK'
