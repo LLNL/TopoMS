@@ -1562,9 +1562,10 @@ void TopoMS::write_msc_bond_stats(const std::string &filename) const {
 
             const double &x = bond.parameterization[i].first;
             const double &y = bond.bchg[i];
-            const double ic = (bond.bichg.empty())  ? 0 : bond.bichg[i];
+            fprintf(outfile, "% 08.5f, %.6E\n", x,y);
+            /*const double ic = (bond.bichg.empty())  ? 0 : bond.bichg[i];
             const double ia = (bond.biarea.empty()) ? 0 : bond.biarea[i];
-            fprintf(outfile, "% 08.5f, %.6E, %.6E, %.6E\n", x,y,ic,ia);
+            fprintf(outfile, "% 08.5f, %.6E, %.6E, %.6E\n", x,y,ic,ia);*/
         }
     }
 

@@ -17,7 +17,7 @@ class BondInfo:
 
         self.area = 0
         self.chg = 0
-        
+
         self.p = []
         self.val = []
         self.ichg = []
@@ -47,8 +47,8 @@ class BondInfo:
         if l > 0:
             print ': [', min(self.p), max(self.p), ']',
             print '[', min(self.val), max(self.val), ']',
-            print '[', min(self.ichg), max(self.ichg), ']',
-            print '[', min(self.iarea), max(self.iarea), ']'
+            #print '[', min(self.ichg), max(self.ichg), ']',
+            #print '[', min(self.iarea), max(self.iarea), ']'
         else:
             print ''
 
@@ -112,8 +112,8 @@ def read_bondStats(infilename):
             l = [float(k) for k in l.split(',')]
             s.p.append(l[0])
             s.val.append(l[1])
-            s.ichg.append(l[2])
-            s.iarea.append(l[3])
+            #s.ichg.append(l[2])
+            #s.iarea.append(l[3])
 
         lidx += 1
 
@@ -132,11 +132,11 @@ def plot_bonds(bonds, type):
     labels = ['Ca','Ca','Cl','Cl','Cl','Cl']
     colors = ['black', 'red', 'green', 'blue', 'yellow', 'cyan']
     atoms = []
-    
+
     #plt.figure(figsize=(8,6))
     plt.figure()
     for s in bonds:
-    
+
         x = s.p
         if type == 0:
             y = s.val
@@ -146,10 +146,10 @@ def plot_bonds(bonds, type):
             y = s.iarea
 
         plt.semilogy(x, y, linewidth=1, alpha=0.5) #linestyle='--', label=s.title())
-        
+
         atoms.append([s.atomid[0], x[0],y[0]])
         atoms.append([s.atomid[1], x[-1],y[-1]])
-    
+
     atoms.sort(key = operator.itemgetter(0))
     atoms = np.array(atoms)
     atoms[:,1] = atoms[:,1].round(decimals=2)
@@ -160,7 +160,7 @@ def plot_bonds(bonds, type):
     for id in xrange(1,7):
         ids = np.where(atoms[:,0] == id)[0]
         plt.scatter(atoms[ids,1],atoms[ids,2], c=colors[id-1], label=labels[id-1], alpha=0.5)
-    
+
 
     plt.legend(loc=3)
     plt.xlim([-2,2])
@@ -191,6 +191,7 @@ if __name__ == '__main__':
     plt.savefig(outfile+'_chg.pdf')
     print 'Saved plot:', outfile+'_chg.pdf'
 
+    '''
     plot_bonds(bonds, 1)
     plt.savefig(outfile+'_ichg.pdf')
     print 'Saved plot:', outfile+'_ichg.pdf'
@@ -198,4 +199,5 @@ if __name__ == '__main__':
     plot_bonds(bonds, 2)
     plt.savefig(outfile+'_iarea.pdf')
     print 'Saved plot:', outfile+'_iarea.pdf'
+    '''
     # --------------------------------------------------------------------------

@@ -570,7 +570,7 @@ void TopoMS::analyze_bonds() {
     const FLOATTYPE file_to_ae = m_metadata.volume_file2Angs() * m_metadata.charge_file2electrons();
     const FLOATTYPE chgDens_fileUnit2e = (this->m_inputtype == IT_CUBE ? vol_box * file_to_ae : 1.0) / (FLOATTYPE) num_gridPts;
 
-    printf(" -- Analyzing bond properties...");
+    printf(" -- Analyzing properties of %d bonds...", this->m_mscbonds.size());
     fflush(stdout);
 
     if(debug)
@@ -625,6 +625,7 @@ void TopoMS::analyze_bonds() {
             const float x = bond.parameterization[i].first;
             const MSC::Vec3d &p = bond.parameterization[i].second;
 
+            /*
 #ifdef USE_VTK
             // get the point and neighbors for this point on the bond
             bond.get_points_idx(origin, nbrs, gdims, int(i));
@@ -638,6 +639,8 @@ void TopoMS::analyze_bonds() {
             bond.biarea[i] = vol_voxel*res.first;
             bond.bichg[i]  = chgDens_fileUnit2e*res.second;
 #endif
+            */
+
             // ok, now, also note the actual value at this point
             double pos[3] = {p[0], p[1], p[2]};
             bond.bchg[i] = MultilinearInterpolator::trilinear_interpolation(pos, m_baderfunc, gdims);
