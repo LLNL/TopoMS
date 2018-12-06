@@ -252,12 +252,10 @@ OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 END OF TERMS AND CONDITIONS
 */
 
-
 /**
  *  @file    TopoMS_MainWindow.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the functionality for ui app
  *
@@ -268,135 +266,300 @@ END OF TERMS AND CONDITIONS
  */
 
 #include "TopoMS.h"
-#include "TopoMS_MainWindow.h"
 #include "TopoMS_Viewer.h"
+#include "TopoMS_MainWindow.h"
 #include "TransferFunctionEditor.h"
 
-// -----------------------------------------------------------------
-void TopoMSApp::update_plabels() {
-    this->ui.dsb_persval->setValue( m_mdlayer->get_persistence() );
+#ifdef USE_VTK
+#include "vtkVolumeSlicer.h"
+#include "vtkDataArray.h"
+#endif
+// -----------------------------------------------------------------------------
+// ui callbacks
+// -----------------------------------------------------------------------------
+
+void TopoMSApp::on_actionLoad_config_triggered() {
+
+    QString fileName = QFileDialog::getOpenFileName(this,
+                                    tr("Load TopoMS config file"), "",
+                                    tr("Config files (*.conf *.config);;All Files (*)"));
+
+    if (fileName.length() == 0) return;
+    this->initialize(fileName);
+    ui.actionLoad_config->setEnabled(false);
 }
-void TopoMSApp::on_pb_saveBader_clicked() {
-    m_mdlayer->write_bader();
+void TopoMSApp::on_actionLoad_camera_triggered() {
+
+    QString fileName = QFileDialog::getOpenFileName(this,
+                                        tr("Load TopoMS camera state"), "",
+                                        tr("Camera files (*.xml);;All Files (*)"));
+
+    if (fileName.length() == 0) return;
+    this->m_viewer->setStateFileName(fileName);
+    this->m_viewer->restoreStateFromFile();
 }
-void TopoMSApp::on_pb_saveGraph_clicked() {
-    m_mdlayer->write_msc();
+void TopoMSApp::on_actionSave_camera_triggered() {
+
+    QString fileName = QFileDialog::getSaveFileName(this,
+                                    tr("Save TopoMS camera state"), "",
+                                    tr("Camera files (*.xml);;All Files (*)"));
+
+    if (fileName.length() == 0) return;
+    this->m_viewer->setStateFileName(fileName);
+    this->m_viewer->saveStateToFile();
 }
 
+void TopoMSApp::on_pb_saveBader_clicked() {    m_mdlayer->write_bader();    }
+void TopoMSApp::on_pb_saveGraph_clicked() {    m_mdlayer->write_msc();      }
 void TopoMSApp::on_pb_updateGraph_clicked() {
 
     if (!persval_chngd && !filterval_chngd)
         return;
 
-    this->m_mdlayer->simplify_msc( this->ui.dsb_persval->value(), this->ui.dsb_filterval->value() );
+    if (this->m_mdlayer->m_fieldtype == TopoMS::FT_CHG) {
+        this->m_mdlayer->extract_mgraph( this->ui.dsb_persval->value(), this->ui.dsb_filterval->value() );
+    }
+    else {
+        this->m_mdlayer->extract_lpot_nbrhood_li(this->ui.dsb_persval->value(), this->ui.dsb_filterval->value());
+    }
 
     filterval_chngd = false;
     persval_chngd = false;
     this->m_viewer->updateGL();
 }
 
-void TopoMSApp::on_cb_log_toggled(bool val) {
+// -----------------------------------------------------------------------------
+// additional slots to update ui
+// -----------------------------------------------------------------------------
+void TopoMSApp::update_plabels() {
+    this->ui.dsb_persval->setValue( m_mdlayer->get_persistence() );
+}
 
-    size_t fsz = m_mdlayer->get_gridSize();
-    const FLOATTYPE *func = m_mdlayer->get_func();
-    float l = m_mdlayer->m_negated ? -1.0 : 1.0;
+void TopoMSApp::update_vol_rendering() {
 
-    if (m_func == 0) {
-        m_func = new float[fsz];
+    const bool do_vol = ui.cb_volume->isChecked();
+    const bool do_log = ui.cb_volumelog->isChecked();
+    static bool curr_do_log = true;
+
+    const bool update_needed = (m_funcVol == nullptr) || (do_vol && (do_log != curr_do_log));
+
+    if (update_needed){
+
+        const size_t fsz = m_mdlayer->get_gridSize();
+
+        if (m_funcVol == nullptr) {
+            m_funcVol = new float[fsz];
+        }
+
+        const FLOATTYPE *func = m_mdlayer->get_func();
+        const FLOATTYPE l = m_mdlayer->m_negated ? -1.0 : 1.0;
+
+        // log
+        if (do_log) {
+            for(size_t i = 0; i < fsz; i++) {
+                m_funcVol[i] = std::log10(1.0 + l*func[i]);
+            }
+        }
+
+        // linear
+        else {
+            for(size_t i = 0; i < fsz; i++) {
+                m_funcVol[i] = l*func[i];
+            }
+        }
+
+        curr_do_log = do_log;
+
+        m_voltf_plot->set_function(m_funcVol, m_mdlayer->get_gridSize());
+        m_voltf_plot->set_histogram(128);
+        m_voltf_plot->replot();
     }
 
-    // linear
-    if (!val) {
-        for(size_t i = 0; i < fsz; i++) {
-            m_func[i] = l*func[i];
+    if (do_vol) {
+        m_viewer->set_volrendFunction(m_funcVol);
+        m_viewer->set_volrendTransferFunction(m_voltf_plot->tfunc, m_voltf_plot->tfsize);
+    }
+
+    m_viewer->updateGL();
+}
+void TopoMSApp::update_slice( vtkDataArray *data, std::vector<float> &values) {
+
+    values.clear();
+
+#ifdef USE_VTK
+    const bool do_labels = (data->GetDataType() == VTK_INT);
+    const bool do_log = (!do_labels && ui.cb_slicelog->isChecked());
+    const size_t nvals = data->GetNumberOfValues();
+
+
+    values.reserve(nvals);
+    if (do_labels) {
+        for(size_t i = 0; i < nvals; i++) {
+
+            float value = float (data->GetComponent(i, 0));
+            if (value < 0)
+                continue;
+            values.push_back(value);
         }
     }
-
-    // log
     else {
-        for(size_t i = 0; i < fsz; i++) {
-            m_func[i] = std::log10(1.0 + l*func[i]);
+
+        const FLOATTYPE l = m_mdlayer->m_negated ? -1.0 : 1.0;
+
+        if (do_log) {
+            for(size_t i = 0; i < nvals; i++) {
+
+                float value = float (data->GetComponent(i, 0));
+                if (std::isnan(value))
+                    continue;
+
+                values.push_back( std::log10(1.0 + l*value));
+            }
+        }
+        else {
+            for(size_t i = 0; i < nvals; i++) {
+
+                float value = float (data->GetComponent(i, 0));
+                if (std::isnan(value))
+                    continue;
+
+                values.push_back(l*value);
+            }
         }
     }
+#endif
+    m_surtf_plot->set_function(values);
+    m_surtf_plot->set_histogram(128);
+    m_surtf_plot->replot();
+}
 
-    m_plot->set_function(m_func, m_mdlayer->get_gridSize());
-    m_plot->set_histogram(128);
-    m_viewer->set_volrendFunction(m_func);
-
-    m_plot->replot();
+void TopoMSApp::update_tfunc_vol() {
+    m_viewer->set_volrendTransferFunction(m_voltf_plot->tfunc, m_voltf_plot->tfsize);
+    m_viewer->updateGL();
+}
+void TopoMSApp::update_tfunc_surf() {
+    m_viewer->set_sliceTransferFunction(m_surtf_plot->tfunc, m_surtf_plot->tfsize);
     m_viewer->updateGL();
 }
 
-void TopoMSApp::tfunc_updated() {
-    m_viewer->set_volrendTransferFunction(m_plot->tfunc, m_plot->tfsize);
-    m_viewer->updateGL();
-}
+// -----------------------------------------------------------------------------
+// constructor and initializer
+// -----------------------------------------------------------------------------
 
-// -----------------------------------------------------------------
 TopoMSApp::TopoMSApp() : QMainWindow() {
 
     m_mdlayer = new TopoMS();
-    m_plot = new TFEditor();
     m_viewer = new TopoMSViewer(this);
-    m_func = 0;
+    m_funcVol = 0;
 
     ui.setupUi(this);
+
+    // disable everything!
+    this->ui.groupBox_range->setEnabled(false);
+    this->ui.groupBox_data->setEnabled(false);
+    this->ui.groupBox_bader->setEnabled(false);
+    this->ui.groupBox_graph->setEnabled(false);
+    this->ui.groupBox_topo->setEnabled(false);
+
     this->setCentralWidget(m_viewer);
     this->show();                       // needed to call Viewer::init()
-
     m_viewer->printGLStatus();
 }
 
 bool TopoMSApp::initialize(QString configfilename) {
 
-    // ----------------------------
-    // init mdlayer and load data
+    // ------------------------------------------------------------------------
+    // load data
 
-    bool success = this->m_mdlayer->load(configfilename.toStdString());
-    if(!success) {
+    bool load_success = this->m_mdlayer->load(configfilename.toStdString());
+    if(!load_success)
         return false;
-    }
 
-    // ----------------------------
-    // init rest of the elements
+    // ------------------------------------------------------------------------
+    // initialize the ui elements correspponding to the data
 
     this->setWindowTitle("TopoMS ("+configfilename+")");
-    this->ui.cb_showAtoms->setEnabled(this->m_mdlayer->m_inputtype == TopoMS::IT_VASP);
 
-    if (this->m_mdlayer->m_config->tfpath.length() == 0) {
-        m_plot->init_tfunc();
-    }
-    else {
-        m_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
-    }
+    // function range
+    this->ui.groupBox_range->setEnabled(true);
 
-    m_viewer->set_dims(m_mdlayer->get_gridDims());
-    m_viewer->set_volrendTransferFunction(m_plot->tfunc, m_plot->tfsize);
-
-    QObject::connect(m_plot, SIGNAL(tfunc_updated()), this, SLOT(tfunc_updated()));
-
-    m_plot->show();
-    this->show();
-
-    // --------------------------------------------
-    // the following will be moved to ui based functions
-    m_mdlayer->init();
-
-    this->ui.dsb_persval->setValue(m_mdlayer->m_config->sval_threshold);
-    this->ui.dsb_filterval->setValue(m_mdlayer->m_config->fval_threshold);
-
-    static std::pair<FLOATTYPE, FLOATTYPE> vr = m_mdlayer->get_frange();
+    std::pair<FLOATTYPE, FLOATTYPE> vr = m_mdlayer->get_frange();
     this->ui.label_minval->setText(" min:  " + QString::number(vr.first));
     this->ui.label_maxval->setText(" max: " + QString::number(vr.second));
     update_plabels();
 
-    if (m_mdlayer->bader() == false) {
-        this->ui.groupBox_bader->setEnabled(false);
+    // input data
+    this->ui.groupBox_data->setEnabled(true);
+
+    //TODO: also show atoms for Cube data
+    if (this->m_mdlayer->m_inputtype != TopoMS::IT_VASP) {
+        this->ui.cb_showAtoms->setEnabled(false);
+        this->ui.label_radAtom->setEnabled(false);
+        this->ui.dsb_atom->setEnabled(false);
     }
-    if (m_mdlayer->msc() == false){
-        this->ui.groupBox_graph->setEnabled(false);
-        this->ui.groupBox_topo->setEnabled(false);
+
+    // set up volume renderer
+    if(m_mdlayer->m_metadata.m_lattice.is_cuboid()) {
+
+        // show the transfer function
+        m_voltf_plot = new TFEditor("Volume Transfer Function");
+        if (this->m_mdlayer->m_config->tfpath.length() == 0) {
+            m_voltf_plot->init_tfunc();
+        }
+        else {
+            m_voltf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
+        }
+
+        QObject::connect(m_voltf_plot, SIGNAL(tfunc_updated()), this, SLOT(update_tfunc_vol()));
+        m_voltf_plot->show();
+
+        this->update_vol_rendering();
     }
+    else {
+        std::cerr << "Volume rendering currently not supported for non-cuboidal lattice!\n";
+        this->ui.cb_volume->setChecked(false);
+        this->ui.cb_volume->setEnabled(false);
+    }
+
+    m_viewer->set_lattice(this->m_mdlayer->m_metadata.m_lattice,
+                          this->m_mdlayer->m_metadata.m_lattice_origin,
+                          this->m_mdlayer->m_metadata.m_grid_dims);
+
+    // ------------------------------------------------------------------------
+    // now, initialize md and perform the analysis
+    // if analysis is successful, update the corresponding ui elements
+
+    m_mdlayer->init();
+
+    bool bader_success = m_mdlayer->bader();
+    this->ui.groupBox_bader->setEnabled(bader_success);
+
+    this->ui.dsb_persval->setValue(m_mdlayer->m_config->threshold_simp);
+    this->ui.dsb_filterval->setValue(m_mdlayer->m_config->threshold_filt);
+
+    bool msc_success = m_mdlayer->msc();
+
+
+    if (msc_success){
+
+        this->ui.groupBox_graph->setEnabled(msc_success);
+        this->ui.groupBox_topo->setEnabled(msc_success);
+
+        m_surtf_plot = new TFEditor("Surface Transfer Function");
+        if (this->m_mdlayer->m_config->tfpath.length() == 0) {
+            m_surtf_plot->init_tfunc();
+        }
+        else {
+            m_surtf_plot->init_tfunc(this->m_mdlayer->m_config->tfpath);
+        }
+
+        update_tfunc_surf();
+        QObject::connect(m_surtf_plot, SIGNAL(tfunc_updated()), this, SLOT(update_tfunc_surf()));
+        m_surtf_plot->show();
+    }
+
+    // ------------------------------------------------------------------------
+    this->show();
 }
 
 // -----------------------------------------------------------------

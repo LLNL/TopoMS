@@ -57,119 +57,134 @@ purposes.
 */
 
 /**
- *  @file    Utils.cpp
+ *  @file    Vec3.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
- *  @date    10/01/2017
+ *  @date    10/01/2018
  *
- *  @brief This file provides some basic utility functions
+ *  @brief This class handles 3x3 matrix objects
  *
  *  @section DESCRIPTION
  *
- *  This file provides some basic utility functions
+ *  This class handles 3x3 matrix objects
  *
  */
 
-#include <fstream>
-#include <sstream>
+#ifndef _MAT3_H_
+#define _MAT3_H_
+
+#include <cmath>
+#include <vector>
 #include <iostream>
-#include <iterator>
 
-#ifndef _WIN32
-#include <unistd.h>
-#include <sys/ioctl.h>
-#endif
+#include "Vec3.h"
 
-#include "Utils.h"
+template <typename T=double>
+class Mat3 {
 
-void Utils::print_separator(unsigned int n) {
+public:
+    T v[3][3];
 
-#ifndef _WIN32
-    struct winsize w;
-    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-    n = w.ws_col;
-#else
-    n = 40;
-#endif
-    for(int i=0; i<n; i++) printf("-");
-    printf("\n");
-}
-
-// -----------------------------------------------------------
-// -----------------------------------------------------------
-
-std::string Utils::get_extn(std::string filename) {
-
-    std::string::size_type idx = filename.rfind('.');
-
-    if(idx != std::string::npos){
-        return filename.substr(idx+1);
+public:
+    Mat3() {
+        for(uint8_t i = 0; i < 3; i++)
+        for(uint8_t j = 0; j < 3; j++)
+            v[i][j] = T(0);
     }
-    else
-    {
-        return "";
-    }
-}
-std::string Utils::get_directory(std::string filename) {
 
-    std::string::size_type idx = filename.rfind('/');
+    void eye() {
+        for(uint8_t i = 0; i < 3; i++)
+        for(uint8_t j = 0; j < 3; j++)
+            v[i][j] = T(0);
 
-    if(idx != std::string::npos){
-        return filename.substr(0, idx+1);
+        for(uint8_t i = 0; i < 3; i++)
+            v[i][i] = T(1);
     }
-    else
-    {
-        return "./";
+
+    bool is_eye() const {
+
+        Mat3<T> m;  m.eye();
+        for(uint8_t i = 0; i < 3; i++)
+        for(uint8_t j = 0; j < 3; j++){
+            if (fabs(v[i][j] - m.v[i][j]) > 0.0000001)
+                return false;
+        }
+        return true;
     }
-}
-#if 0
-std::string Utils::toupper(std::string& str) {
-    for(uint32_t i=0; str[i]!=0; i++) {
-        if(97 <= str[i] && str[i] <= 122){
-            str[i]-=32;
+
+    bool is_cuboid() const {
+
+        for(uint8_t i = 0; i < 3; i++)
+        for(uint8_t j = 0; j < 3; j++){
+            if (i == j) {
+                continue;
+            }
+            if (fabs(v[i][j]) > 0.0000001)
+                return false;
+        }
+        return true;
+    }
+    T determinant() const {
+        return   v[0][0]*(v[1][1]*v[2][2] - v[1][2]*v[2][1])
+               - v[0][1]*(v[1][0]*v[2][2] - v[1][2]*v[2][0])
+               + v[0][2]*(v[1][0]*v[2][1] - v[1][1]*v[2][1]);
+    }
+    Mat3 inverse() const {
+
+        Mat3 inv;
+        double det = determinant();
+        if (fabs(det) < 0.000001) {
+            std::cerr << "Cannot compute inverse for singular matrix!\n";
+            inv.eye();
+            return inv;
+        }
+
+        det = 1.0/det;
+        inv.v[0][0] = det*(v[1][1]*v[2][2] - v[1][2]*v[2][1]);
+        inv.v[0][1] = det*(v[0][2]*v[2][1] - v[0][1]*v[2][2]);
+        inv.v[0][2] = det*(v[0][1]*v[1][2] - v[0][2]*v[1][1]);
+        inv.v[1][0] = det*(v[1][2]*v[2][0] - v[1][0]*v[2][2]);
+        inv.v[1][1] = det*(v[0][0]*v[2][2] - v[0][2]*v[2][0]);
+        inv.v[1][2] = det*(v[0][2]*v[1][0] - v[0][0]*v[1][2]);
+        inv.v[2][0] = det*(v[1][0]*v[2][1] - v[1][1]*v[2][0]);
+        inv.v[2][1] = det*(v[0][1]*v[2][0] - v[0][0]*v[2][1]);
+        inv.v[2][2] = det*(v[0][0]*v[1][1] - v[0][1]*v[1][0]);
+        return inv;
+    }
+
+    void transform(const T in[3], T out[3]) const {
+        for(uint8_t d = 0; d < 3; d++){
+            out[d] = in[0]*v[0][d] + in[1]*v[1][d] + in[2]*v[2][d];
         }
     }
-    return str;
-}
 
-std::string Utils::trim(std::string& str) {
-    str.erase(0, str.find_first_not_of(' '));       //prefixing spaces
-    str.erase(str.find_last_not_of(' ')+1);         //surfixing spaces
-    return str;
-}
-
-std::string Utils::remove_carriagereturn(std::string &str) {
-    if (str[str.length()-1] == '\r')  str = str.erase(str.length()-1, 1);
-}
-
-std::string Utils::rtrim(std::string &str) {
-    //remove_carriagereturn(str);
-    str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) {
-        return !std::isspace(ch);
-    }).base(), str.end());
-}
-#endif
-std::vector<std::string> Utils::tokenize(const std::string &line, char delim) {
-
-    std::vector<std::string> tokens;
-
-    std::stringstream ss;
-    ss.str(line);
-
-    std::string item;
-    while (std::getline(ss, item, delim)) {
-        tokens.push_back( item );
+    Vec3<T> transform(const T in[3]) const {
+        Vec3<T> out;
+        for(uint8_t d = 0; d < 3; d++){
+            out[d] = in[0]*v[0][d] + in[1]*v[1][d] + in[2]*v[2][d];
+        }
+        return out;
     }
-    return tokens;
-}
 
-std::vector<std::string> Utils::tokenize(std::string line){
+    Vec3<T> transform(const Vec3<T> &in) const {
+        Vec3<T> out;
+        for(uint8_t d = 0; d < 3; d++){
+            out[d] = in[0]*v[0][d] + in[1]*v[1][d] + in[2]*v[2][d];
+        }
+        return out;
+    }
 
-    // construct a stream from the string
-    std::stringstream linestream(line);
+    std::vector<T> linearize(bool homogenous = false) const {
 
-    // use stream iterators to copy the stream to the vector as whitespace separated strings
-    std::istream_iterator<std::string> it_line(linestream);
-    std::istream_iterator<std::string> end_line;
-    std::vector<std::string> tokens(it_line, end_line);
-    return tokens;
-}
+        const size_t sz = (homogenous) ? 4 : 3;
+        std::vector<T> mat (sz*sz, T(0));
+
+        for(uint8_t r = 0; r < 3; r++)
+        for(uint8_t c = 0; c < 3; c++)
+            mat[sz*c + r] = v[r][c];
+
+        if (homogenous) {   mat[15] = T(1); }
+        return mat;
+    }
+};
+
+#endif

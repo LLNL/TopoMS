@@ -19,11 +19,15 @@
 #pragma interface
 #endif // WIN32
 
+#ifdef USE_GLEW
+#include <GL/glew.h>
+#endif
+
 #ifdef __APPLE__
     #include <OpenGL/glu.h>  // openGL utilities
     #include <OpenGL/gl.h>   // openGL declarations
 #else
-    #include <GL/glu.h>  // openGL utilities
+ //   #include <GL/glu.h>  // openGL utilities
  // #include <GL/gl.h>   // openGL declarationd aniketh: glu.h already includes gl.h
 #endif
 

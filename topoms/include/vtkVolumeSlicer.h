@@ -1,4 +1,3 @@
-
 /*
 Copyright (c) 2017, Lawrence Livermore National Security, LLC.
 Produced at the Lawrence Livermore National Laboratory.
@@ -254,24 +253,45 @@ END OF TERMS AND CONDITIONS
 */
 
 
-#include <QApplication>
-#include "TopoMS_MainWindow.h"
+/**
+ *  @file    vtkVolumeSlicer.h
+ *  @author  Harsh Bhatia (hbhatia@llnl.gov)
+ *  @date    05/12/2018
+ *
+ *  @brief This file provides the functionality for slicing a 3D volume using vtk
+ *
+ *  @section DESCRIPTION
+ *
+ *  This file provides the functionality for slicing a 3D volume using vtk
+ *
+ */
 
-int main(int argc, char** argv){
+#ifndef _VTKVOLUMESLICER_H_
+#define _VTKVOLUMESLICER_H_
+#include <cstddef>
 
-    if(argc != 2){
-        printf(" Usage: %s <config_file>\n", argv[0]);
-        return 1;
-    }
+class vtkImageData;
+class vtkMatrix4x4;
 
-    //QSurfaceFormat::setDefaultFormat(QSurfaceFormat::defaultFormat());
+class vtkVolumeSlicer {
 
-    // Read command lines arguments.
-    QApplication application(argc,argv);
+    bool m_periodic;
+    vtkImageData *m_volume, *m_slice;
+    vtkMatrix4x4 *m_matrix;
 
-    TopoMSApp mdapp;
-    mdapp.initialize(argv[1]);
+public:
+    vtkVolumeSlicer() : m_volume(nullptr), m_matrix(nullptr), m_slice(nullptr), m_periodic(false) {}
 
-    // Run main loop.
-    return application.exec();
-}
+    //void set_volume(const double *volume, const size_t dims[3], bool periodic=true, bool negated=false);
+    void set_volume(vtkImageData *volume, bool periodic=true);
+    void set_orientation(double o[3], double nx[3], double ny[3], double nz[3]);
+
+    vtkImageData* slice() const;
+    vtkImageData* volume() const;
+    void matrix(double mat[16]) const;
+
+    void transform(const double in[3], double out[3]) const;
+
+    vtkImageData* compute();
+};
+#endif

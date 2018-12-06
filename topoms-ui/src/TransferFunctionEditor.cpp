@@ -256,7 +256,6 @@ END OF TERMS AND CONDITIONS
  *  @file    TransferFunctionEditor.cpp
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides the functionality for an interactive tf editor
  *
@@ -338,6 +337,9 @@ void TFEditor::set_histogram(uint num_bins, bool use_log) {
     if(!histo)
         return;
 
+    if (fsize == 0)
+        return;
+
     // create histogram
     QVector<double> histogram, bins;
     double bin_width = 0;
@@ -353,7 +355,7 @@ void TFEditor::set_histogram(uint num_bins, bool use_log) {
 
     this->freqAxis->rescale();
     this->valueAxis->setRange( bins[0], bins[bins.size()-1] + bin_width );
-    this->update();
+    this->replot();
 }
 
 // ===========================================================
@@ -543,7 +545,7 @@ void TFEditor::init_plots() {
     static const QString channelnames[4] = {"Red", "Green", "Blue", "Alpha"};
 
     // ----------------------------------------------
-    setWindowTitle("Transfer Function Editor");
+    setWindowTitle(this->name.c_str());
     setLocale(QLocale(QLocale::English, QLocale::UnitedKingdom)); // period as decimal separator and comma as thousand separator
 
     // ----------------------------------------------
@@ -679,15 +681,15 @@ void TFEditor::tfunc2channels() {
 void TFEditor::colorGradient2tfunc(QCPColorGradient &colorGradient) {
 
     QRgb* cols = new QRgb[tfsize];
-
     double* keys = new double[tfsize];
-    for(int i = 0; i < tfsize; i++) {
+
+    for(size_t i = 0; i < tfsize; i++) {
         keys[i] = (double)i;
     }
 
     colorGradient.colorize(keys, QCPRange (0, tfsize-1), cols, tfsize);
 
-    for(int i = 0; i < tfsize; i++) {
+    for(size_t i = 0; i < tfsize; i++) {
 
         tfunc[4*i  ] = (float) qRed(cols[i]) / 255.0;
         tfunc[4*i+1] = (float) qGreen(cols[i]) / 255.0;
@@ -697,8 +699,8 @@ void TFEditor::colorGradient2tfunc(QCPColorGradient &colorGradient) {
         //printf("%d : (%d %d %d %d)\n", i, qRed(cols[i]), qGreen(cols[i]),
         //       qBlue(cols[i]), qAlpha(cols[i]));
     }
-	delete[] cols;
-	delete[] keys;
+    delete[] cols;
+    delete[] keys;
 }
 
 QCPColorGradient TFEditor::tfunc2colorGradient() {

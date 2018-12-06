@@ -595,7 +595,7 @@ namespace MSC {
             ThreadedTimer timer(1);
             timer.StartGlobal();
 
-            printf(" -- Creating maxV_labeling ...");
+            printf(" -- Creating maxV_labeling...");
             fflush(stdout);
 
             int num_cells = m_tgrid->numCells();
@@ -1000,92 +1000,76 @@ namespace MSC {
         }
 
 
-        void write(std::string filename, const std::vector<INDEX_TYPE> &cp) {
+    void compute_output() {
 
-            std::ofstream out(filename.c_str());
-            for (int i = 0; i < cp.size(); i++) {
-                out << cp[i] << std::endl;
+        create_maxVertex_labeling();
+
+        //maxV_labeling->OutputToIntFile("maxlabeling.raw");
+        //setlocale(LC_NUMERIC, "");
+
+        printf(" -- Creating Robin's Discrete Gradient...");
+        fflush(stdout);
+
+        ThreadedTimer timer(1);
+        timer.StartGlobal();
+
+        size_t num_verts = m_tgrid->numCells(0);
+
+        #pragma omp parallel
+        {
+            int thread_num = omp_get_thread_num();
+            int num_threads = omp_get_num_threads();
+
+            std::vector<INDEX_TYPE> partition;
+            ArrayIndexPartitioner::EvenChunkSplit(num_verts, num_threads, partition);
+
+            for (INDEX_TYPE vid = partition[thread_num]; vid < partition[thread_num + 1]; vid++) {
+                process_lowerStar(vid);
             }
-            out.close();
-
         }
-
-        void compute_output() {
-
-            create_maxVertex_labeling();
-
-            //maxV_labeling->OutputToIntFile("maxlabeling.raw");
-            //exit(1);
-            //setlocale(LC_NUMERIC, "");
-            printf(" -- Creating Robin's Discrete Gradient... ");
-            fflush(stdout);
-
-
-            ThreadedTimer timer(1);
-            timer.StartGlobal();
-
-            // ==============================================================================================
-
-            size_t num_verts = m_tgrid->numCells(0);
-
-            //const float progress_percent = 1.0f;
-            //const INDEX_TYPE progress_id = progress_percent/100.0f *double(num_verts);
-
-#pragma omp parallel
-            {
-
-                int thread_num = omp_get_thread_num();
-                int num_threads = omp_get_num_threads();
-
-                std::vector<INDEX_TYPE> partition;
-                ArrayIndexPartitioner::EvenChunkSplit(num_verts, num_threads, partition);
-
-                for (INDEX_TYPE vid = partition[thread_num]; vid < partition[thread_num + 1]; vid++) {
-
-                    process_lowerStar(vid);
-                }
-            }
-
-            timer.EndGlobal();
-            printf(" Done! ");
-            timer.PrintAll();
+        timer.EndGlobal();
+        printf(" Done! ");
+        timer.PrintAll();
     }
 
     void summarize() {
 
-            //printf("\n summarizing ...");
-            //fflush(stdout);
-            size_t ncells = m_tgrid->numCells();
+        size_t ncells = m_tgrid->numCells();
+        size_t total[4] = { 0,0,0,0 };
+        size_t critical[4] = { 0,0,0,0 };
+        size_t assigned[4] = { 0,0,0,0 };
+        size_t unassigned[4] = { 0,0,0,0 };
 
-            size_t total[4] = { 0,0,0,0 };
-            size_t critical[4] = { 0,0,0,0 };
-            size_t assigned[4] = { 0,0,0,0 };
-            size_t unassigned[4] = { 0,0,0,0 };
+        for (size_t i = 0; i < ncells; i++) {
+            int dim = this->m_tgrid->dimension(i);
+            total[dim]++;
 
-            for (size_t i = 0; i < ncells; i++) {
-
-                int dim = this->m_tgrid->dimension(i);
-
-                total[dim]++;
-
-                if (this->m_labeling->getCritical(i)) { critical[dim]++; }
-                if (this->is_assigned(i)) {             assigned[dim]++; }
-                else {                                  unassigned[dim]++; }
-            }
-            printf("   -- found %d critical cells [%d, %d, %d, %d]\n",
-                (critical[0] + critical[1] + critical[2] + critical[3]), critical[0], critical[1], critical[2], critical[3]);
-            /*
-            printf("\n total cells %d\n", ncells);
-            for(int k = 0; k < 4; k++)
-            printf(" dim %d : total %d, assigned %d, critical %d, unassigned %d\n", k, total[k], assigned[k], critical[k], unassigned[k]);
-            */
+            if (this->m_labeling->getCritical(i)) { critical[dim]++;    }
+            if (this->is_assigned(i)) {             assigned[dim]++;    }
+            else {                                  unassigned[dim]++;  }
         }
 
+        printf("   -- found %d critical cells (%d %d %d %d)\n",
+                    (critical[0] + critical[1] + critical[2] + critical[3]), critical[0], critical[1], critical[2], critical[3]);
 
+        if (unassigned[0] > 0 || unassigned[1] > 0 || unassigned[2] > 0 || unassigned[3] > 0) {
+           std::cerr << " ERROR: Discrete gradient algorithm could not assign all cells: (" <<
+                        unassigned[0] << ", " << unassigned[1] << ", " << unassigned[2] << ", " << unassigned[3] << ")\n";
+        }
+        /*
+        printf("\n total cells %d\n", ncells);
+        for(int k = 0; k < 4; k++)
+            printf(" dim %d : total %d, assigned %d, critical %d, unassigned %d\n", k, total[k], assigned[k], critical[k], unassigned[k]);
+        */
+    }
 
-
-        // ===============================================================================================
-
-    };
+    void write(std::string filename, const std::vector<INDEX_TYPE> &cp) {
+        std::ofstream out(filename.c_str());
+        for (size_t i = 0; i < cp.size(); i++) {
+            out << cp[i] << std::endl;
+        }
+        out.close();
+    }
 };
+}   // end of namespace
 #endif

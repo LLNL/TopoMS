@@ -56,120 +56,31 @@ Security, LLC, and shall not be used for advertising or product endorsement
 purposes.
 */
 
-/**
- *  @file    Utils.cpp
- *  @author  Harsh Bhatia (hbhatia@llnl.gov)
- *  @date    10/01/2017
- *
- *  @brief This file provides some basic utility functions
- *
- *  @section DESCRIPTION
- *
- *  This file provides some basic utility functions
- *
- */
+#include "TopoMS.h"
 
-#include <fstream>
-#include <sstream>
-#include <iostream>
-#include <iterator>
+int main(int argc, char** argv) {
 
-#ifndef _WIN32
-#include <unistd.h>
-#include <sys/ioctl.h>
-#endif
-
-#include "Utils.h"
-
-void Utils::print_separator(unsigned int n) {
-
-#ifndef _WIN32
-    struct winsize w;
-    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-    n = w.ws_col;
-#else
-    n = 40;
-#endif
-    for(int i=0; i<n; i++) printf("-");
-    printf("\n");
-}
-
-// -----------------------------------------------------------
-// -----------------------------------------------------------
-
-std::string Utils::get_extn(std::string filename) {
-
-    std::string::size_type idx = filename.rfind('.');
-
-    if(idx != std::string::npos){
-        return filename.substr(idx+1);
+    if(argc != 2 && argc != 3){
+        printf(" Usage: %s <config_file> [input_file]\n", argv[0]);
+        return 1;
     }
-    else
-    {
-        return "";
+
+    std::string configfilename = argv[1];
+    std::string infilename = (argc == 2) ? "" : argv[2];
+
+    TopoMS topoms;
+    bool success = topoms.load(configfilename, infilename);
+    if(!success) {
+        return 1;
     }
-}
-std::string Utils::get_directory(std::string filename) {
 
-    std::string::size_type idx = filename.rfind('/');
+    topoms.init();
 
-    if(idx != std::string::npos){
-        return filename.substr(0, idx+1);
-    }
-    else
-    {
-        return "./";
-    }
-}
-#if 0
-std::string Utils::toupper(std::string& str) {
-    for(uint32_t i=0; str[i]!=0; i++) {
-        if(97 <= str[i] && str[i] <= 122){
-            str[i]-=32;
-        }
-    }
-    return str;
-}
+    if( topoms.bader() )
+        topoms.write_bader();
 
-std::string Utils::trim(std::string& str) {
-    str.erase(0, str.find_first_not_of(' '));       //prefixing spaces
-    str.erase(str.find_last_not_of(' ')+1);         //surfixing spaces
-    return str;
-}
+    if( topoms.msc() )
+        topoms.write_msc();
 
-std::string Utils::remove_carriagereturn(std::string &str) {
-    if (str[str.length()-1] == '\r')  str = str.erase(str.length()-1, 1);
-}
-
-std::string Utils::rtrim(std::string &str) {
-    //remove_carriagereturn(str);
-    str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) {
-        return !std::isspace(ch);
-    }).base(), str.end());
-}
-#endif
-std::vector<std::string> Utils::tokenize(const std::string &line, char delim) {
-
-    std::vector<std::string> tokens;
-
-    std::stringstream ss;
-    ss.str(line);
-
-    std::string item;
-    while (std::getline(ss, item, delim)) {
-        tokens.push_back( item );
-    }
-    return tokens;
-}
-
-std::vector<std::string> Utils::tokenize(std::string line){
-
-    // construct a stream from the string
-    std::stringstream linestream(line);
-
-    // use stream iterators to copy the stream to the vector as whitespace separated strings
-    std::istream_iterator<std::string> it_line(linestream);
-    std::istream_iterator<std::string> end_line;
-    std::vector<std::string> tokens(it_line, end_line);
-    return tokens;
+    return 0;
 }

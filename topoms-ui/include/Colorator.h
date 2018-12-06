@@ -256,7 +256,6 @@ END OF TERMS AND CONDITIONS
  *  @file    Colorator.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This file provides some utility functions for the viewer
  *
@@ -290,13 +289,15 @@ public:
         if (symbol.compare("C") == 0)   return QColor::fromHsv(210, 170, 255);
         if (symbol.compare("H") == 0)   return QColor::fromHsv(300, 170, 255);
 
-        if(symbol.compare("C") == 0)           h = 60;
+             if(symbol.compare("C") == 0)      h = 60;
         else if(symbol.compare("O") == 0)      h = 120;
         else if(symbol.compare("H") == 0)      h = 180;
         else if(symbol.compare("P") == 0)      h = 240;
         else if(symbol.compare("F") == 0)      h = 280;
         else if(symbol.compare("B") == 0)      h = 100;
         else if(symbol.compare("Li") == 0)     h = 320;
+        else if(symbol.compare("Ca") == 0)     h = 320;
+        else if(symbol.compare("Cl") == 0)     h = 250;
 
         return QColor::fromHsv(h,s,v);
     }
@@ -304,14 +305,14 @@ public:
     static QColor by_topoIndex(unsigned int idx) {
 
         switch (idx) {
-        case 0:     return Qt::darkRed;
-        case 1:     return Qt::darkYellow;
-        case 2:     return Qt::darkRed;//Cyan;
-        case 3:     return Qt::darkGreen;
+        case 0:     return Qt::darkCyan;        // min
+        case 1:     return Qt::darkYellow;      // 1-sad
+        case 2:     return Qt::darkRed;         // 2-sad
+        case 3:     return Qt::darkGreen;       // max
 
-        case 4:     return Qt::darkRed;
-        case 5:     return Qt::darkYellow;
-        case 6:     return Qt::darkCyan;
+        case 4:     return Qt::darkCyan;        // min -- 1-sad
+        case 5:     return Qt::darkYellow;      // 1-sad -- 2-sad
+        case 6:     return Qt::darkRed;         // 2-sad -- max
         }
         return Qt::black;
     }

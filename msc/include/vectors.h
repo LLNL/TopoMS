@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 University of Utah 
+ * Copyright (c) 2017 University of Utah
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -208,6 +208,14 @@ namespace MSC {
             return (m_v[0] * a[0]) + (m_v[1] * a[1]) + (m_v[2] * a[2]);
         }
 
+        const GenericVec3 Cross(const GenericVec3& b){
+            GenericVec3 c;
+            c[0] = m_v[1]*b[2] - m_v[2]*b[1];
+            c[1] = m_v[2]*b[0] - m_v[0]*b[2];
+            c[2] = m_v[0]*b[1] - m_v[1]*b[0];
+            return c;
+        }
+
         DTYPE MagSq() const {
             return (m_v[0] * m_v[0]) + (m_v[1] * m_v[1]) + (m_v[2] * m_v[2]);
         }
@@ -298,6 +306,8 @@ namespace MSC {
             return (a * (1.0 - t)) + (b * (t));
         }
 
+
+
     };
 
 
@@ -305,6 +315,7 @@ namespace MSC {
 
     typedef GenericVec3<int> Vec3i;
     typedef GenericVec3<INDEX_TYPE> Vec3l;
+    typedef GenericVec3<float> Vec3f;
     typedef GenericVec3<double> Vec3d;
     typedef GenericVec3<bool> Vec3b;
 

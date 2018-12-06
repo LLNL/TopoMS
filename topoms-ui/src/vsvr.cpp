@@ -19,7 +19,6 @@
 #pragma implementation
 #endif // WIN32
 
-#include <GL/glew.h>
 #include "vsvr.h"
 
 #ifdef _DEBUG

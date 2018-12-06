@@ -60,7 +60,6 @@ purposes.
  *  @file    Vec3.h
  *  @author  Harsh Bhatia (hbhatia@llnl.gov)
  *  @date    10/01/2017
- *  @version 1.0
  *
  *  @brief This class handles 3-dimensional vector objects
  *
@@ -75,13 +74,15 @@ purposes.
 
 #include <cmath>
 #include <cstdio>
-#include <cstring>
 
 template <typename T>
-struct Vec3 {
-    T v[3]; //x,y,z;
+class Vec3 {
 
-    Vec3() {                v[0] = v[1] = v[2] = 0;         }
+private:
+    T v[3];
+
+public:
+    Vec3() {                v[0] = v[1] = v[2] = T(0);      }
     Vec3(T x, T y, T z) {   v[0] = x; v[1] = y; v[2] = z;   }
 
     T& operator[](int i) {              return v[i]; }
@@ -138,7 +139,7 @@ struct Vec3 {
         return res;
     }
 
-    operator Vec3<int>() const { return Vec3<int>(this->v[0], this->v[1], this->v[2]); }
+    operator Vec3<int>() const {    return Vec3<int>(this->v[0], this->v[1], this->v[2]); }
     operator Vec3<double>() const { return Vec3<double>(this->v[0], this->v[1], this->v[2]); }
 
     // linear interpolation betwee 2 vectors: returns the vector a * (1-t) + b * t
@@ -155,17 +156,14 @@ struct Vec3 {
 
     // this is a hack that rounds towards -infinity for "small" negative values
     Vec3<int> int_floor() const {
-        //(*this).print_vf();
         Vec3 dres = *this;
         dres = dres + 1000.0;
-        //dres.print_vf();
         Vec3<int> ires = dres;
-        //ires.print_vi();
         ires = ires + -1000;
-        //ires.print_vi();
         return ires;
     }
 };
+
 
 typedef Vec3<int> Vec3i;
 typedef Vec3<bool> Vec3b;

@@ -56,28 +56,74 @@ Security, LLC, and shall not be used for advertising or product endorsement
 purposes.
 */
 
-#include "TopoMS.h"
+/**
+ *  @file    MSCBond.h
+ *  @author  Harsh Bhatia (hbhatia@llnl.gov)
+ *  @date    10/01/2018
+ *
+ *  @brief This file provides a class for analyzing a bond.
+ *
+ *  @section DESCRIPTION
+ *
+ *  This file provides a class for analyzing a bond.
+ *
+ */
 
-int main(int argc, char** argv) {
+#ifndef _MSCBOND_H_
+#define _MSCBOND_H_
 
-    if(argc != 2){
-        printf(" Usage: %s <config_file>\n", argv[0]);
-        return 1;
-    }
+#include <vector>
+#include <utility>
 
-    TopoMS topoms;
-    bool success = topoms.load(argv[1]);
-    if(!success) {
-        return 1;
-    }
+#include "basic_types.h"
+#include "vectors.h"
 
-    topoms.init();
-
-    if( topoms.bader() )
-        topoms.write_bader();
-
-    if( topoms.msc() )
-        topoms.write_msc();
-
-    return 0;
+namespace MS {
+class SystemInfo;
 }
+
+/**
+  *  @brief This struct provides a colleciton of utilities to handle MSC bonds
+  */
+struct MSCBond {
+
+    // saddle node id and MSC coordinates
+    INT_TYPE saddle;
+    MSC::Vec3d scoords;
+
+    // extrema ids and MSC coordiantes
+    std::vector<INT_TYPE> extrema;
+    std::vector<MSC::Vec3d> ecoords;
+
+    // the corresponding atoms (starting with 1)
+    std::vector<size_t> atomIds;
+
+    // geometric representation of paths
+    std::vector<std::vector<MSC::Vec3d>> paths;
+
+    // parameterization of the path
+    std::vector<std::pair<float, MSC::Vec3d>> parameterization;
+
+    // integrated charge and area (at the saddle)
+    double ichg, iarea;
+
+    // integrated charge and area along the path (indexed into the parameterization)
+    std::vector<double> bichg, biarea;
+
+    // charge at the bond path
+    std::vector<double> bchg;
+
+    // -------------------------------------------------------------------------
+    static void fix_periodic(MSC::Vec3d &p, const MSC::Vec3d &orig, const size_t dims[3]);
+
+    // -------------------------------------------------------------------------
+    MSCBond(INT_TYPE _saddle=-1) : saddle(_saddle), ichg(-1), iarea(-1) {}
+
+    void print() const;
+    bool check2() const;
+    void parameterize(const MS::SystemInfo &metadata);
+    void get_points(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], float p) const;
+    void get_points_idx(MSC::Vec3d &origin, std::vector<MSC::Vec3d> &nbrs, const size_t dims[], int pidx) const;
+};
+
+#endif

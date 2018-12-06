@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 University of Utah 
+ * Copyright (c) 2017 University of Utah
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -287,7 +287,10 @@ namespace MSC {
             n.destroyed = INT_INFTY;
             n.firstarc = NULLID;
             n.boundary = mMesh->boundaryValue(cellID);
-            //printf("n.boundary = %d\n", n.boundary);
+
+             //if (n.cellindex == 23436 || n.cellindex == 23652)
+             //printf("n.cellindex = %d, n.boundary = %d\n", n.cellindex, n.boundary);
+             
             //if (n.boundary) {
             //	INDEX_TYPE coords[3];
             //	sgg->getCoords(coords, cellID);
@@ -390,8 +393,10 @@ namespace MSC {
             na.persistence = nup.value - nlo.value;
             na.boundary = nlo.boundary + nup.boundary;
             na.dim = nlo.dim;
-            if (na.persistence < 0 && nlo.boundary == nup.boundary) printf("creatinga inversion %f, %d-%d, b%d-b%d\n",
-                (float)na.persistence, nlo.dim, nup.dim, nlo.boundary, nup.boundary);
+
+            if (na.persistence < 0 && nlo.boundary == nup.boundary){
+                //printf("creatinga inversion %f, %d-%d, b%d-b%d\n", (float)na.persistence, nlo.dim, nup.dim, nlo.boundary, nup.boundary);
+            }
 
             // now insert into global sort if it has a chance of being cancelled
             InsertArcIntoSimplification(na, na_id);
@@ -604,6 +609,11 @@ namespace MSC {
             select_persistence = cancel_num_to_pers.size() - 1;
         }
 
+        INT_TYPE nextArc(arc<SCALAR_TYPE>& ap, INT_TYPE n) {
+            if (ap.lower == n) return ap.lower_next;
+            if (ap.upper == n) return ap.upper_next;
+            return 0;
+        }
     protected:
         int cancel(INT_TYPE a) {
 
@@ -810,12 +820,7 @@ namespace MSC {
 
 
 
-        INT_TYPE nextArc(arc<SCALAR_TYPE>& ap, INT_TYPE n) {
-            if (ap.lower == n) return ap.lower_next;
-            if (ap.upper == n) return ap.upper_next;
-            printf("\nERROR BARF POOP\n");
-            return 0;
-        }
+
         int countMultiplicity(arc<SCALAR_TYPE>& ap, INT_TYPE ctime) {
             INT_TYPE nu = ap.upper;
             INT_TYPE nl = ap.lower;
@@ -1055,6 +1060,7 @@ namespace MSC {
 
 
     public:
+
         virtual void ComputeHierarchy(SCALAR_TYPE pers_limit){
             cancel_num_to_pers.clear();
             printf(" -- Performing cancellation to %f...\n", pers_limit);
@@ -1098,7 +1104,7 @@ namespace MSC {
 
                 //printf("Done\n");
             }
-            printf("\r  -- Cancelling finished: %u val=%f\n", num_cancelled, (float)max_pers_so_far);
+            printf("\r  -- Cancelling finished. num_cancelled = %u, max_persistence = %f\n", num_cancelled, (float)max_pers_so_far);
 
 
             //_evercomputed = true;
@@ -1225,166 +1231,10 @@ namespace MSC {
             _fillArcGeometry(aid, v, true);
             //v.push_back(nodes[arcs[aid].lower].cellindex);
         }
-
-        class SurroundingArcsIterator {
-        protected:
-            MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* mMSC;
-            INT_TYPE mNID;
-            INT_TYPE currarc;
-            INT_TYPE next_arc(INT_TYPE arcid) {
-                return mMSC->nextArc(mMSC->getArc(arcid), mNID);
-            }
-
-        public:
-            SurroundingArcsIterator(MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* msc) :
-                mMSC(msc){}
-
-            void begin(INT_TYPE nid) {
-                //printf("begin %d...\n");
-                mNID = nid;
-                node<SCALAR_TYPE>& n = mMSC->getNode(mNID);
-                currarc = n.firstarc;
-            }
-            bool valid() {
-                //printf("valid? %d %d\n", currarc, NULLID);
-                return currarc != NULLID;
-            }
-            INT_TYPE value() {
-                return currarc;
-            }
-            void advance() {
-                //printf("Advance? %d\n", currarc);
-                if (currarc == NULLID) return;
-                //printf("...\n");
-                currarc  = next_arc(currarc);
-                //printf("advance = %d\n", currarc);
-            }
-        };
-
-        class SurroundingLivingArcsIterator : public SurroundingArcsIterator {
-        protected:
-            bool advance_until_alive() {
-                this->currarc = this->next_arc(this->currarc);
-
-                if (this->currarc == NULLID) return false;
-                while (!this->mMSC->isArcAlive(this->currarc)) {
-                     this->currarc = this->next_arc(this->currarc);
-                     if (this->currarc == NULLID) return false;
-                }
-                return true;
-            }
-        public:
-            SurroundingLivingArcsIterator(MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* msc) :
-                SurroundingArcsIterator(msc) {}
-
-            void begin(INT_TYPE nid) {
-                //printf("begin %d...\n");
-                SurroundingArcsIterator::begin(nid);
-                if (!this->mMSC->isArcAlive(this->currarc)) advance_until_alive();
-                //printf("begin return %d\n", currarc);
-            }
-
-            void advance() {
-                //printf("Advance? %d\n", currarc);
-                if (this->currarc == NULLID) return;
-                //printf("...\n");
-                advance_until_alive();
-                //printf("advance = %d\n", currarc);
-            }
-        };
-
-        class NodesIterator {
-        protected:
-            MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* mMSC;
-            INT_TYPE currid;
-
-        public:
-            NodesIterator(MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* msc) :
-                mMSC(msc){}
-
-            void begin() {
-                currid = 0;
-            }
-            bool valid() {
-                return currid < mMSC->nodes.size();
-            }
-            INT_TYPE value() {
-                return currid;
-            }
-            void advance() {
-                currid++;
-            }
-        };
-        class LivingNodesIterator : public NodesIterator {
-        protected:
-            void advance_until_alive() {
-                this->currid++;
-                while (this->valid() && !this->mMSC->isNodeAlive(this->currid)) {
-                    this->currid++;
-                }
-            }
-        public:
-            LivingNodesIterator(MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* msc) :
-                NodesIterator(msc) {}
-
-            void begin() {
-                NodesIterator::begin();
-                advance_until_alive();
-            }
-            void advance() {
-                advance_until_alive();
-            }
-        };
-
-        // replicates functionality just uses different end criteria
-        class ArcsIterator {
-        protected:
-            MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* mMSC;
-            INT_TYPE currid;
-
-        public:
-            ArcsIterator(MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* msc) :
-                mMSC(msc){}
-
-            void begin() {
-                currid = 0;
-            }
-            bool valid() {
-                return currid < mMSC->arcs.size();
-            }
-            INT_TYPE value() {
-                return currid;
-            }
-            void advance() {
-                currid++;
-            }
-        };
-        class LivingArcsIterator : public ArcsIterator {
-        protected:
-            void advance_until_alive() {
-                this->currid++;
-                while (this->valid() && !this->mMSC->isArcAlive(this->currid)) {
-                    this->currid++;
-                }
-            }
-        public:
-            LivingArcsIterator(MorseSmaleComplexBasic<SCALAR_TYPE, MESH_TYPE, FUNC_TYPE, GRAD_TYPE>* msc) :
-                ArcsIterator(msc) {}
-
-            void begin() {
-                ArcsIterator::begin();
-                advance_until_alive();
-            }
-            void advance() {
-                advance_until_alive();
-            }
-        };
     };
 
 
 
 
-};
+}   // end of namespace
 #endif
-
-
