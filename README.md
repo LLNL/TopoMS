@@ -1,4 +1,5 @@
-## TopoMS, Version 1.0
+## TopoMS, Version 1.1
+#### Released: Nov 18, 2018
 
 <img align="right" src="./docs/jcc25344-toc-0001-m.jpg" width="50%">
 <!--<img align="right" src="https://user-images.githubusercontent.com/10440378/35475248-ebbbba0c-034f-11e8-8980-1199a5c5fb56.png" width="50%">-->
