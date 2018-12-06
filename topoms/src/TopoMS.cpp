@@ -158,6 +158,7 @@ bool TopoMS::msc_get_node(size_t idx, int &dim, INDEX_TYPE &cellIdx, MSC::Vec3d 
 
     const MSC::node<FLOATTYPE> &n = this->m_msc->getNode(idx);
     cellIdx = n.cellindex;
+
     dim = (this->m_negated) ? 3-n.dim : n.dim;
     this->msc_cellid_to_gcoords(cellIdx, ncoords);
     return true;

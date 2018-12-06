@@ -699,7 +699,6 @@ void TFEditor::colorGradient2tfunc(QCPColorGradient &colorGradient) {
         //printf("%d : (%d %d %d %d)\n", i, qRed(cols[i]), qGreen(cols[i]),
         //       qBlue(cols[i]), qAlpha(cols[i]));
     }
-
     delete[] cols;
     delete[] keys;
 }
