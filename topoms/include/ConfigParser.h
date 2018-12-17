@@ -82,7 +82,6 @@ class Config {
     const std::string configname;
 
 public:
-
     std::string infiletype;     // VASP or CUBE
     std::string fieldtype;      // CHG or POT
 
@@ -195,8 +194,8 @@ public:
             std::cerr << "\n    Config::parse() - Fieldtype not specified. Aborting!\n";
             exit(1);
         }
-        if (fieldtype != "CHG" && fieldtype != "POT") {
-            std::cerr << "\n    Config::parse() - Invalid Fieldtype ("<<fieldtype<<"). Expected CHG or POT. Aborting!\n";
+        if (fieldtype != "CHG" && fieldtype != "POT" && fieldtype != "OTHER") {
+            std::cerr << "\n    Config::parse() - Invalid Fieldtype ("<<fieldtype<<"). Expected CHG or POT or OTHER. Aborting!\n";
             exit(1);
         }
 

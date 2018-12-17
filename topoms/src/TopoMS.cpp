@@ -359,6 +359,7 @@ bool TopoMS::load(const std::string &configfilename, std::string datafile) {
         std::swap(m_mscfunc, m_baderfunc);
     }
 
+    this->m_fieldtype = FT_UNKNOWN;
     if (m_config->fieldtype == "CHG") {             this->m_fieldtype = FT_CHG;         }
     else if (m_config->fieldtype == "POT") {        this->m_fieldtype = FT_POT;         }
 
@@ -395,7 +396,13 @@ bool TopoMS::load(const std::string &configfilename, std::string datafile) {
 bool TopoMS::init() {
 
     Utils::print_separator();
-    std::cout << "\n =====>> Initializing TopoMS\n";
+    std::string ftype = "unknown";
+    switch(this->m_fieldtype) {
+    case FT_CHG:    ftype = "charge_density";   break;
+    case FT_POT:    ftype = "local_potential";  break;
+    }
+
+    std::cout << "\n =====>> Initializing TopoMS! (field_type = " << ftype << ")\n";
 
     // -----------------------------------------------------------------------
     // compute bader for CHG, if msc needs to be computed
@@ -1070,11 +1077,9 @@ bool TopoMS::msc() {
     timer.PrintAll ();
 
     // ---------------------------------------------------------------------
-    if (this->m_fieldtype == FT_CHG) {
-        extract_mgraph( persistence_val, filter_val );
-    }
-    else {
-        extract_lpot_nbrhood_li( persistence_val, filter_val);
+    switch(this->m_fieldtype) {
+    case FT_CHG:    extract_mgraph( persistence_val, filter_val );          break;
+    case FT_POT:    extract_lpot_nbrhood_li( persistence_val, filter_val);  break;
     }
     return true;
 }

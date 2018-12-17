@@ -316,11 +316,9 @@ void TopoMSApp::on_pb_updateGraph_clicked() {
     if (!persval_chngd && !filterval_chngd)
         return;
 
-    if (this->m_mdlayer->m_fieldtype == TopoMS::FT_CHG) {
-        this->m_mdlayer->extract_mgraph( this->ui.dsb_persval->value(), this->ui.dsb_filterval->value() );
-    }
-    else {
-        this->m_mdlayer->extract_lpot_nbrhood_li(this->ui.dsb_persval->value(), this->ui.dsb_filterval->value());
+    switch(int(this-m_mdlayer->m_fieldtype)) {
+    case TopoMS::FT_CHG:    this->m_mdlayer->extract_mgraph(this->ui.dsb_persval->value(), this->ui.dsb_filterval->value());          break;
+    case TopoMS::FT_POT:    this->m_mdlayer->extract_lpot_nbrhood_li(this->ui.dsb_persval->value(), this->ui.dsb_filterval->value());  break;
     }
 
     filterval_chngd = false;
@@ -491,13 +489,6 @@ bool TopoMSApp::initialize(QString configfilename) {
     // input data
     this->ui.groupBox_data->setEnabled(true);
 
-    //TODO: also show atoms for Cube data
-    if (this->m_mdlayer->m_inputtype != TopoMS::IT_VASP) {
-        this->ui.cb_showAtoms->setEnabled(false);
-        this->ui.label_radAtom->setEnabled(false);
-        this->ui.dsb_atom->setEnabled(false);
-    }
-
     // set up volume renderer
     if(m_mdlayer->m_metadata.m_lattice.is_cuboid()) {
 
@@ -525,6 +516,11 @@ bool TopoMSApp::initialize(QString configfilename) {
                           this->m_mdlayer->m_metadata.m_lattice_origin,
                           this->m_mdlayer->m_metadata.m_grid_dims);
 
+    if (m_mdlayer->m_fieldtype == TopoMS::FT_UNKNOWN) {
+        ui.cb_mpaths->setEnabled(false);
+        ui.cb_mnodes->setEnabled(false);
+    }
+
     // ------------------------------------------------------------------------
     // now, initialize md and perform the analysis
     // if analysis is successful, update the corresponding ui elements
@@ -539,9 +535,7 @@ bool TopoMSApp::initialize(QString configfilename) {
 
     bool msc_success = m_mdlayer->msc();
 
-
     if (msc_success){
-
         this->ui.groupBox_graph->setEnabled(msc_success);
         this->ui.groupBox_topo->setEnabled(msc_success);
 
