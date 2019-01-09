@@ -292,7 +292,7 @@ public:
 
     float get_periodic_cutoff(bool world=false) const {
 
-        float cut[3] = {m_metadata.m_grid_dims[0], m_metadata.m_grid_dims[1], m_metadata.m_grid_dims[2]};
+        float cut[3] = {float(m_metadata.m_grid_dims[0]), float(m_metadata.m_grid_dims[1]), float(m_metadata.m_grid_dims[2])};
         if (world) {
             float gcut[3] = {cut[0],cut[1],cut[2]};
             m_metadata.grid_to_world(gcut, cut);
